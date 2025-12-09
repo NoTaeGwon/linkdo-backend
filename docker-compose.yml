@@ -1,0 +1,41 @@
+# ================================================================
+# 파일명       : docker-compose.yml
+# 목적         : Linkdo 백엔드 + MongoDB 컨테이너 구성
+# 설명         :
+#   - api: FastAPI 백엔드 서버
+#   - mongo: MongoDB 데이터베이스
+# 사용법       :
+#   - 시작: docker-compose up -d
+#   - 중지: docker-compose down
+#   - 로그: docker-compose logs -f
+# ================================================================
+
+version: '3.8'
+
+services:
+  # FastAPI 백엔드
+  api:
+    build: .
+    container_name: linkdo-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/linkdo
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  # MongoDB 데이터베이스
+  mongo:
+    image: mongo:7.0
+    container_name: linkdo-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+# 데이터 영구 저장용 볼륨
+volumes:
+  mongo_data:
+
