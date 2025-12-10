@@ -97,7 +97,6 @@ def get_graph():
     edges_result = []
     for edge in edges:
         edges_result.append({
-            "id": edge.get("id"),
             "source": edge.get("source"),
             "target": edge.get("target"),
             "weight": edge.get("weight", 0.5),

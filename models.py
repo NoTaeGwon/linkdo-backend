@@ -112,12 +112,13 @@ class EdgeResponse(BaseModel):
     API 응답용 엣지 모델
     
     Attributes:
-        id: 엣지 고유 식별자 (자동 생성)
         source: 시작 노드(태스크)의 ID
         target: 끝 노드(태스크)의 ID
         weight: 연관도
+    
+    Note:
+        엣지는 source + target 조합으로 유일하게 식별됩니다.
     """
-    id: int
     source: str
     target: str
     weight: float
