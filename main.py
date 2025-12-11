@@ -90,6 +90,7 @@ def get_graph():
             "priority": task.get("priority", "medium"),
             "status": task.get("status", "todo"),
             "category": task.get("category", "general"),
+            "tags": task.get("tags", []),
         })
     
     # Edges 조회

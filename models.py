@@ -42,6 +42,7 @@ class TaskCreate(BaseModel):
         priority: 우선순위 (기본값: medium)
         status: 상태 (기본값: todo)
         category: 카테고리 (기본값: general)
+        tags: 태그 (필수)
     """
     id: str
     title: str
@@ -49,6 +50,7 @@ class TaskCreate(BaseModel):
     priority: Priority = "medium"
     status: Status = "todo"
     category: str = "general"
+    tags: list[str] = []
 
 
 class TaskUpdate(BaseModel):
@@ -61,12 +63,14 @@ class TaskUpdate(BaseModel):
         priority: 우선순위
         status: 상태
         category: 카테고리
+        tags: 태그
     """
     title: Optional[str] = None
     description: Optional[str] = None
     priority: Optional[Priority] = None
     status: Optional[Status] = None
     category: Optional[str] = None
+    tags: Optional[list[str]] = None
 
 
 class TaskResponse(BaseModel):
@@ -80,6 +84,7 @@ class TaskResponse(BaseModel):
         priority: 우선순위
         status: 상태
         category: 카테고리
+        tags: 태그
     """
     id: str
     title: str
@@ -87,6 +92,7 @@ class TaskResponse(BaseModel):
     priority: Priority
     status: Status
     category: str
+    tags: list[str]
 
 
 # ============================================================

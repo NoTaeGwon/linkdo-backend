@@ -12,7 +12,6 @@
 """
 
 from fastapi import APIRouter, HTTPException
-from typing import List
 from models import TaskCreate, TaskUpdate, TaskResponse
 
 # 라우터 생성
@@ -33,13 +32,13 @@ def set_collection(collection):
     tasks_collection = collection
 
 
-@router.get("/", response_model=List[TaskResponse])
+@router.get("/", response_model=list[TaskResponse])
 def get_all_tasks():
     """
     전체 태스크 목록을 조회합니다.
     
     Returns:
-        List[TaskResponse]: 모든 태스크 목록
+        list[TaskResponse]: 모든 태스크 목록
     """
     tasks = list(tasks_collection.find())
     result = []
@@ -51,6 +50,7 @@ def get_all_tasks():
             "priority": task.get("priority", "medium"),
             "status": task.get("status", "todo"),
             "category": task.get("category", "general"),
+            "tags": task.get("tags", []),
         }
         result.append(task_dict)
     return result
@@ -80,6 +80,7 @@ def get_task(task_id: str):
         "priority": task.get("priority", "medium"),
         "status": task.get("status", "todo"),
         "category": task.get("category", "general"),
+        "tags": task.get("tags", []),
     }
 
 
@@ -138,6 +139,7 @@ def update_task(task_id: str, task_update: TaskUpdate):
         "priority": updated.get("priority", "medium"),
         "status": updated.get("status", "todo"),
         "category": updated.get("category", "general"),
+        "tags": updated.get("tags", []),
     }
 
 
