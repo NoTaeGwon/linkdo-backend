@@ -12,10 +12,12 @@
 """
 
 import os
+import google.generativeai as genai
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
+from pydantic import BaseModel
 
 # 라우터 임포트
 from routes import tasks, edges
@@ -37,6 +39,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Gemini 설정
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+class TagSuggestionRequest(BaseModel):
+    """태그 추천 요청 모델"""
+    title: str
+    description: str = ""
 
 # MongoDB 연결
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/linkdo")
@@ -156,3 +168,51 @@ def get_tags():
 
     result = tasks_collection.aggregate(pipline)
     return [doc["_id"] for doc in result]
+
+@app.post("/api/tags/suggest-tags")
+async def suggest_tags(request: TagSuggestionRequest):
+    """
+    LLM을 이용한 태그 추천
+
+    Args:
+        request: 테스크 제목과 설명
+    
+    Returns:
+        dist: 추천 태그 목록
+    """
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="Gemini API 키가 설정되지 않았습니다")
+
+    # 기존 태그 목록 가져오기
+    existing_tags = get_tags()
+
+    # 프롬포트 생성
+    prompt = f"""당신은 할 일(Task) 관리 앱의 태그 추천 시스템입니다.
+
+사용자가 입력한 할 일에 적절한 태그를 3~5개 추천해주세요.
+
+기존에 사용중인 태그 목록: {existing_tags if existing_tags else "없음"}
+
+할 일 제목: {request.title}
+할 일 설명: {request.description if request.description else "없음"}
+
+규칙:
+1. 기존 태그가 있다면 최대한 기존 태그를 활용하세요
+2. 새로운 태그가 필요하면 간결하고 명확한 한글 태그를 만드세요
+3. 태그는 쉼표로 구분해서 출력하세요
+4. 태그만 출력하고 다른 설명은 하지 마세요
+
+예시 출력: 업무, 회의, 중요"""
+    
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        
+        # 응답 파싱
+        tags_text = response.text.strip()
+        tags = [tag.strip() for tag in tags_text.split(",")]
+        tags = [tag for tag in tags if tag] # 빈 태그 제거
+
+        return {"tags": tags}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"태그 추천 실패: {str(e)}")
