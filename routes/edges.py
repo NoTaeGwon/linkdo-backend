@@ -10,7 +10,6 @@
 """
 
 from fastapi import APIRouter, HTTPException
-from typing import List
 from models import EdgeCreate, EdgeResponse
 
 # 라우터 생성
@@ -30,13 +29,13 @@ def set_collection(collection):
     global edges_collection
     edges_collection = collection
 
-@router.get("/", response_model=List[EdgeResponse])
+@router.get("/", response_model=list[EdgeResponse])
 def get_all_edges():
     """
     전체 엣지 목록을 조회
     
     Returns:
-        List[EdgeResponse]: 모든 엣지 목록
+        list[EdgeResponse]: 모든 엣지 목록
     """
     edges = list(edges_collection.find())
     result = []
