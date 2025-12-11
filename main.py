@@ -138,3 +138,21 @@ def delete_task_cascade(task_id: str):
         "task_id": task_id,
         "deleted_edges_count": edge_result.deleted_count
     }
+
+
+@app.get("/api/tags")
+def get_tags():
+    """
+    전체 태그 목록 조회 (모든 테스크에서 unique 태그 추출)
+
+    Returns:
+        list[str]: 정렬된 태그 목록
+    """
+    pipline = [
+        {"$unwind": "$tags"},
+        {"$group": {"_id": "$tags"}},
+        {"$sort": {"_id": 1}},
+    ]
+
+    result = tasks_collection.aggregate(pipline)
+    return [doc["_id"] for doc in result]

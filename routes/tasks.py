@@ -11,6 +11,7 @@
 ================================================================
 """
 
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 from models import TaskCreate, TaskUpdate, TaskResponse
 
@@ -33,14 +34,20 @@ def set_collection(collection):
 
 
 @router.get("/", response_model=list[TaskResponse])
-def get_all_tasks():
+def get_all_tasks(tag: Optional[str] = None):
     """
     전체 태스크 목록을 조회합니다.
+
+    Args:
+        tag: 필터링할 태그(선택)
     
     Returns:
         list[TaskResponse]: 모든 태스크 목록
     """
-    tasks = list(tasks_collection.find())
+    # 태그 필터링
+    query = {"tags": tag} if tag else {}
+
+    tasks = list(tasks_collection.find(query))
     result = []
     for task in tasks:
         task_dict = {
