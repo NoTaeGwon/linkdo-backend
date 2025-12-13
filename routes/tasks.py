@@ -58,6 +58,7 @@ def get_all_tasks(tag: Optional[str] = None):
             "status": task.get("status", "todo"),
             "category": task.get("category", "general"),
             "tags": task.get("tags", []),
+            "embedding": task.get("embedding", []),
         }
         result.append(task_dict)
     return result
@@ -88,6 +89,7 @@ def get_task(task_id: str):
         "status": task.get("status", "todo"),
         "category": task.get("category", "general"),
         "tags": task.get("tags", []),
+        "embedding": task.get("embedding", []),
     }
 
 
@@ -109,6 +111,12 @@ def create_task(task: TaskCreate):
         raise HTTPException(status_code=400, detail="이미 존재하는 ID입니다")
     
     task_dict = task.model_dump()
+
+    # 임베딩 생성 (제목 + 설명 + 태그)
+    text_for_embedding = f"{task.title} {task.description or ''} {' '.join(task.tags)}"
+    from main import get_embedding
+    task_dict["embedding"] = get_embedding(text_for_embedding)
+    
     tasks_collection.insert_one(task_dict)
     return task_dict
 
@@ -147,6 +155,7 @@ def update_task(task_id: str, task_update: TaskUpdate):
         "status": updated.get("status", "todo"),
         "category": updated.get("category", "general"),
         "tags": updated.get("tags", []),
+        "embedding": updated.get("embedding", []),
     }
 
 

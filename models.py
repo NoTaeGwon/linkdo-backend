@@ -93,7 +93,7 @@ class TaskResponse(BaseModel):
     status: Status
     category: str
     tags: list[str]
-
+    embedding: list[float] = []
 
 # ============================================================
 # Edge 모델
