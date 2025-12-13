@@ -216,3 +216,27 @@ async def suggest_tags(request: TagSuggestionRequest):
         return {"tags": tags}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"태그 추천 실패: {str(e)}")
+
+
+def get_embedding(text: str) -> list[float]:
+    """
+    텍스트를 임베딩 벡터로 변환
+
+    Args:
+        text: 변환할 텍스트
+    
+    Returns:
+        list[float]: 임베딩 백터
+    """
+    if not GEMINI_API_KEY:
+        return []
+
+    try:
+        result = genai.embed_content(
+            model="models/text-embedding-004",
+            content=text,
+        )
+        return result['embedding']
+    except Exception as e:
+        print(f"임베딩 생성 실패: {e}")
+        return []
