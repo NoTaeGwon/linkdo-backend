@@ -12,6 +12,7 @@
 """
 
 import os
+import math
 import google.generativeai as genai
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -240,3 +241,73 @@ def get_embedding(text: str) -> list[float]:
     except Exception as e:
         print(f"임베딩 생성 실패: {e}")
         return []
+
+
+def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
+    """
+    두 백터 간의 코사인 유사도 개산
+
+    Args:
+        vec1: 첫 번째 백터
+        vec2: 두 번째 백터
+
+    Returns:
+        float: 유사도 (-1 ~ 1, 1에 가까울수록 유사)
+    """
+    if not vec1 or not vec2 or len(vec1) != len(vec2):
+        return 0.0
+
+    dot_product = sum(a * b for a, b in zip(vec1, vec2))    # zip: 두 리스트를 짝지어 주는 함수수
+    magnitude1 = math.sqrt(sum(a * a for a in vec1))
+    magnitude2 = math.sqrt(sum(b * b for b in vec2))
+
+    if magnitude1 == 0 or magnitude2 == 0: 
+        return 0.0
+
+    return dot_product / (magnitude1 * magnitude2)
+
+@app.get("/api/tasks/{task_id}/similar")
+def get_similar_tasks(task_id: str, limit: int = 5):
+    """
+    유사한 테스크 찾기
+
+    Args:
+        task_id: 기준 테스크 ID
+        limit: 반환할 유사한 테스크 최대 개수 (기본값: 5)
+    
+    Returns:
+        list: 유사도 순으로 정렬된 테스크 목록
+    """
+    # 기준 테스크 조회
+    target_task = tasks_collection.find_one({"id": task_id})
+    if not target_task:
+        raise HTTPException(status_code=404, detail="테스크를 찾을 수 없습니다")
+    
+    target_embedding = target_task.get("embedding", [])
+    if not target_embedding:
+        raise HTTPException(status_code=400, detail="임베딩 정보가 없는 테스크입니다.")
+    
+    # 모든 테스크와 유사도 계산
+    all_tasks = list(tasks_collection.find({"id": {"$ne": task_id}}))   # $ne: 같지 않은 쿼리
+
+    similarities = []
+    for task in all_tasks:
+        task_embedding = task.get("embedding", [])
+        if task_embedding:
+            similarity = cosine_similarity(target_embedding, task_embedding)
+            similarities.append({
+                "id": task.get("id"),
+                "title": task.get("title"),
+                "description": task.get("description"),
+                "priority": task.get("priority", "medium"),
+                "status": task.get("status", "todo"),
+                "category": task.get("category", "general"),
+                "tags": task.get("tags", []),
+                "similarity": round(similarity, 4)
+            })
+
+    # 유사도 높은 순으로 정렬
+    similarities.sort(key=lambda x: x["similarity"], reverse=True)
+
+    return similarities[:limit]
+
