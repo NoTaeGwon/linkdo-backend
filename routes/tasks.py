@@ -97,6 +97,7 @@ def get_task(task_id: str):
 def create_task(task: TaskCreate):
     """
     새 태스크를 생성합니다.
+    동일한 태그를 가진 기존 태스크들과 엣지를 자동 연결합니다.
     
     Args:
         task: 생성할 태스크 정보
@@ -114,10 +115,39 @@ def create_task(task: TaskCreate):
 
     # 임베딩 생성 (제목 + 설명 + 태그)
     text_for_embedding = f"{task.title} {task.description or ''} {' '.join(task.tags)}"
-    from main import get_embedding
+    from main import get_embedding, edges_collection
     task_dict["embedding"] = get_embedding(text_for_embedding)
     
     tasks_collection.insert_one(task_dict)
+    
+    # 태그 기반 엣지 자동 연결
+    if task.tags:
+        # 동일 태그를 가진 기존 태스크 찾기
+        existing_tasks = tasks_collection.find({
+            "id": {"$ne": task.id},  # 자기 자신 제외
+            "tags": {"$in": task.tags}  # 태그 중 하나라도 일치
+        })
+        
+        for existing_task in existing_tasks:
+            # 공통 태그 수에 따라 weight 계산 (0.0 ~ 1.0)
+            common_tags = set(task.tags) & set(existing_task.get("tags", []))
+            weight = len(common_tags) / max(len(task.tags), len(existing_task.get("tags", [])))
+            
+            # 엣지 생성 (중복 방지)
+            edge_exists = edges_collection.find_one({
+                "$or": [
+                    {"source": task.id, "target": existing_task["id"]},
+                    {"source": existing_task["id"], "target": task.id}
+                ]
+            })
+            
+            if not edge_exists:
+                edges_collection.insert_one({
+                    "source": task.id,
+                    "target": existing_task["id"],
+                    "weight": round(weight, 2)
+                })
+    
     return task_dict
 
 
@@ -177,3 +207,4 @@ def delete_task(task_id: str):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="태스크를 찾을 수 없습니다")
     return {"message": "태스크가 삭제되었습니다", "id": task_id}
+

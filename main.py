@@ -12,7 +12,8 @@
 """
 
 import os
-import math
+import numpy as np
+from sklearn.decomposition import PCA
 import google.generativeai as genai
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -51,6 +52,7 @@ class TagSuggestionRequest(BaseModel):
     title: str
     description: str = ""
 
+
 # MongoDB 연결
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/linkdo")
 client = MongoClient(MONGO_URI)
@@ -81,43 +83,7 @@ def health_check():
         return {"status": "healthy", "database": "connected"}
     except Exception as e:
         return {"status": "unhealthy", "error": str(e)}
-
-
-@app.get("/api/graph")
-def get_graph():
-    """
-    그래프 데이터 통합 조회 (tasks + edges)
-    프론트엔드 초기 로딩 최적화용
-    
-    Returns:
-        dict: { tasks: [...], edges: [...] }
-    """
-    # Tasks 조회
-    tasks = list(tasks_collection.find())
-    tasks_result = []
-    for task in tasks:
-        tasks_result.append({
-            "id": task.get("id"),
-            "title": task.get("title"),
-            "description": task.get("description"),
-            "priority": task.get("priority", "medium"),
-            "status": task.get("status", "todo"),
-            "category": task.get("category", "general"),
-            "tags": task.get("tags", []),
-        })
-    
-    # Edges 조회
-    edges = list(edges_collection.find())
-    edges_result = []
-    for edge in edges:
-        edges_result.append({
-            "source": edge.get("source"),
-            "target": edge.get("target"),
-            "weight": edge.get("weight", 0.5),
-        })
-    
-    return {"tasks": tasks_result, "edges": edges_result}
-
+        
 
 @app.delete("/api/tasks/{task_id}/cascade")
 def delete_task_cascade(task_id: str):
@@ -234,7 +200,7 @@ def get_embedding(text: str) -> list[float]:
 
     try:
         result = genai.embed_content(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-001",
             content=text,
         )
         return result['embedding']
@@ -243,71 +209,123 @@ def get_embedding(text: str) -> list[float]:
         return []
 
 
-def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
+@app.get("/api/graph")
+def get_graph():
     """
-    두 백터 간의 코사인 유사도 개산
-
-    Args:
-        vec1: 첫 번째 백터
-        vec2: 두 번째 백터
+    그대로 데이터 통합 (tasks + edges)
+    PCA로 계산된 2D 좌표 포함
 
     Returns:
-        float: 유사도 (-1 ~ 1, 1에 가까울수록 유사)
+        dict: { tasks: [...], edges: [...] }
     """
-    if not vec1 or not vec2 or len(vec1) != len(vec2):
-        return 0.0
+    # Tasks 조회
+    tasks = list(tasks_collection.find())
 
-    dot_product = sum(a * b for a, b in zip(vec1, vec2))    # zip: 두 리스트를 짝지어 주는 함수수
-    magnitude1 = math.sqrt(sum(a * a for a in vec1))
-    magnitude2 = math.sqrt(sum(b * b for b in vec2))
+    # 임베딩이 있는 테스크툴로 PCA 계산
+    embeddings = []
+    tasks_with_embedding = []
 
-    if magnitude1 == 0 or magnitude2 == 0: 
-        return 0.0
+    for task in tasks:
+        embedding = task.get("embedding", [])
+        if embedding:
+            embeddings.append(embedding)
+            tasks_with_embedding.append(task)
+    
+    # PCA로 2D 좌표 계산
+    coordinates = {}
+    if len(embeddings) >= 2:
+        pca = PCA(n_components=2)
+        coords_2d = pca.fit_transform(np.array(embeddings))
 
-    return dot_product / (magnitude1 * magnitude2)
+        # 좌표를 적절한 범위로 스케일링
+        coords_2d = coords_2d * 200
 
-@app.get("/api/tasks/{task_id}/similar")
-def get_similar_tasks(task_id: str, limit: int = 5):
+        for i, task in enumerate(tasks_with_embedding):
+            coordinates[task.get("id")] = {
+                "x": float(coords_2d[i][0]),
+                "y": float(coords_2d[i][1])
+            }
+
+    # Tasks 결과 생성
+    tasks_result = []
+    for task in tasks:
+        task_id = task.get("id")
+        coord = coordinates.get(task_id, {"x": 0, "y": 0})
+
+        tasks_result.append({
+            "id": task_id,
+            "title": task.get("title"),
+            "description": task.get("description"),
+            "priority": task.get("priority", "medium"),
+            "status": task.get("status", "todo"),
+            "category": task.get("category", "general"),
+            "tags": task.get("tags", []),
+            "x": coord["x"],
+            "y": coord["y"],
+        })
+    
+    # Edges 조회
+    edges = list(edges_collection.find())
+    edges_result = []
+    for edge in edges:
+        edges_result.append({
+            "source": edge.get("source"),
+            "target": edge.get("target"),
+            "weight": edge.get("weight", 0.5),
+        })
+
+    return {"tasks": tasks_result, "edges": edges_result}
+
+
+@app.post("/api/graph/auto-arrange")
+def auto_arrange():
     """
-    유사한 테스크 찾기
-
-    Args:
-        task_id: 기준 테스크 ID
-        limit: 반환할 유사한 테스크 최대 개수 (기본값: 5)
+    전체 태스크를 PCA로 재정렬하여 좌표 반환
     
     Returns:
-        list: 유사도 순으로 정렬된 테스크 목록
+        dict: { positions: [{ id, x, y }, ...] }
     """
-    # 기준 테스크 조회
-    target_task = tasks_collection.find_one({"id": task_id})
-    if not target_task:
-        raise HTTPException(status_code=404, detail="테스크를 찾을 수 없습니다")
+    tasks = list(tasks_collection.find())
     
-    target_embedding = target_task.get("embedding", [])
-    if not target_embedding:
-        raise HTTPException(status_code=400, detail="임베딩 정보가 없는 테스크입니다.")
+    embeddings = []
+    tasks_with_embedding = []
     
-    # 모든 테스크와 유사도 계산
-    all_tasks = list(tasks_collection.find({"id": {"$ne": task_id}}))   # $ne: 같지 않은 쿼리
-
-    similarities = []
-    for task in all_tasks:
-        task_embedding = task.get("embedding", [])
-        if task_embedding:
-            similarity = cosine_similarity(target_embedding, task_embedding)
-            similarities.append({
+    for task in tasks:
+        embedding = task.get("embedding", [])
+        if embedding:
+            embeddings.append(embedding)
+            tasks_with_embedding.append(task)
+    
+    positions = []
+    
+    if len(embeddings) >= 2:
+        pca = PCA(n_components=2)
+        coords_2d = pca.fit_transform(np.array(embeddings))
+        coords_2d = coords_2d * 200  # 스케일링
+        
+        for i, task in enumerate(tasks_with_embedding):
+            positions.append({
                 "id": task.get("id"),
-                "title": task.get("title"),
-                "description": task.get("description"),
-                "priority": task.get("priority", "medium"),
-                "status": task.get("status", "todo"),
-                "category": task.get("category", "general"),
-                "tags": task.get("tags", []),
-                "similarity": round(similarity, 4)
+                "x": float(coords_2d[i][0]),
+                "y": float(coords_2d[i][1])
             })
-
-    # 유사도 높은 순으로 정렬
-    similarities.sort(key=lambda x: x["similarity"], reverse=True)
-
-    return similarities[:limit]
-
+    else:
+        # 임베딩 2개 미만이면 기본 좌표
+        for i, task in enumerate(tasks_with_embedding):
+            positions.append({
+                "id": task.get("id"),
+                "x": float(i * 100),
+                "y": 0.0
+            })
+    
+    # 임베딩 없는 태스크는 (0, 0)
+    embedded_ids = {t.get("id") for t in tasks_with_embedding}
+    for task in tasks:
+        if task.get("id") not in embedded_ids:
+            positions.append({
+                "id": task.get("id"),
+                "x": 0.0,
+                "y": 0.0
+            })
+    
+    return {"positions": positions}
