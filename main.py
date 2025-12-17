@@ -13,8 +13,9 @@
 
 import os
 import numpy as np
-from sklearn.decomposition import PCA
 import google.generativeai as genai
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -135,6 +136,7 @@ def get_tags():
 
     result = tasks_collection.aggregate(pipline)
     return [doc["_id"] for doc in result]
+    
 
 @app.post("/api/tags/suggest-tags")
 async def suggest_tags(request: TagSuggestionRequest):
@@ -237,8 +239,9 @@ def get_graph():
         pca = PCA(n_components=2)
         coords_2d = pca.fit_transform(np.array(embeddings))
 
-        # 좌표를 적절한 범위로 스케일링
-        coords_2d = coords_2d * 200
+        # StandardScaler로 정규화 후 스케일링
+        scaler = StandardScaler()
+        coords_2d = scaler.fit_transform(coords_2d) * 40
 
         for i, task in enumerate(tasks_with_embedding):
             coordinates[task.get("id")] = {
@@ -301,7 +304,10 @@ def auto_arrange():
     if len(embeddings) >= 2:
         pca = PCA(n_components=2)
         coords_2d = pca.fit_transform(np.array(embeddings))
-        coords_2d = coords_2d * 200  # 스케일링
+        
+        # StandardScaler로 정규화 후 스케일링
+        scaler = StandardScaler()
+        coords_2d = scaler.fit_transform(coords_2d) * 40
         
         for i, task in enumerate(tasks_with_embedding):
             positions.append({
