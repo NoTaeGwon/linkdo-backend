@@ -59,6 +59,7 @@ def get_all_tasks(tag: Optional[str] = None):
             "category": task.get("category", "general"),
             "tags": task.get("tags", []),
             "embedding": task.get("embedding", []),
+            "due_date": task.get("due_date"),
         }
         result.append(task_dict)
     return result
@@ -90,6 +91,7 @@ def get_task(task_id: str):
         "category": task.get("category", "general"),
         "tags": task.get("tags", []),
         "embedding": task.get("embedding", []),
+        "due_date": task.get("due_date"),
     }
 
 

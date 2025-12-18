@@ -14,6 +14,8 @@
 import os
 import numpy as np
 import google.generativeai as genai
+from typing import Literal, Optional
+from datetime import datetime
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from dotenv import load_dotenv
@@ -263,6 +265,7 @@ def get_graph():
             "status": task.get("status", "todo"),
             "category": task.get("category", "general"),
             "tags": task.get("tags", []),
+            "due_date": task.get("due_date"),
             "x": coord["x"],
             "y": coord["y"],
         })

@@ -13,6 +13,7 @@
 """
 
 from typing import Literal, Optional
+from datetime import datetime
 from pydantic import BaseModel
 
 
@@ -51,6 +52,7 @@ class TaskCreate(BaseModel):
     status: Status = "todo"
     category: str = "general"
     tags: list[str] = []
+    due_date: Optional[datetime] = None
 
 
 class TaskUpdate(BaseModel):
@@ -71,7 +73,7 @@ class TaskUpdate(BaseModel):
     status: Optional[Status] = None
     category: Optional[str] = None
     tags: Optional[list[str]] = None
-
+    due_date: Optional[datetime] = None
 
 class TaskResponse(BaseModel):
     """
@@ -94,6 +96,7 @@ class TaskResponse(BaseModel):
     category: str
     tags: list[str]
     embedding: list[float] = []
+    due_date: Optional[datetime] = None
 
 # ============================================================
 # Edge 모델
