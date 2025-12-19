@@ -188,6 +188,7 @@ def update_task(task_id: str, task_update: TaskUpdate):
         "category": updated.get("category", "general"),
         "tags": updated.get("tags", []),
         "embedding": updated.get("embedding", []),
+        "due_date": updated.get("due_date"),
     }
 
 
