@@ -1,0 +1,65 @@
+# ================================================================
+# 파일명       : api-deployment.yaml
+# 목적         : Linkdo FastAPI 백엔드 배포
+# ================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linkdo-api
+  namespace: linkdo
+spec:
+  replicas: 2  # 가용성을 위해 2개 Pod
+  selector:
+    matchLabels:
+      app: linkdo-api
+  template:
+    metadata:
+      labels:
+        app: linkdo-api
+    spec:
+      containers:
+        - name: linkdo-api
+          image: 818350161275.dkr.ecr.ap-northeast-2.amazonaws.com/linkdo-backend:latest
+          imagePullPolicy: Always  # ECR에서 이미지 Pull
+          ports:
+            - containerPort: 8000
+          env:
+            - name: MONGO_URI
+              value: "mongodb://mongo:27017/linkdo"
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: linkdo-secrets
+                  key: GEMINI_API_KEY
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+# Service - API 외부 접근용 (NodePort)
+apiVersion: v1
+kind: Service
+metadata:
+  name: linkdo-api
+  namespace: linkdo
+spec:
+  selector:
+    app: linkdo-api
+  ports:
+    - port: 80
+      targetPort: 8000
+  type: LoadBalancer  # AWS ELB 자동 생성
+
+
+

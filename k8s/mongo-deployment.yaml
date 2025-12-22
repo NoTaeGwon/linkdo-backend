@@ -1,0 +1,52 @@
+# ================================================================
+# 파일명       : mongo-deployment.yaml
+# 목적         : MongoDB 데이터베이스 배포
+# ================================================================
+
+# PVC는 EKS IAM 설정 필요 - 테스트용으로 emptyDir 사용
+# ---
+# Deployment - MongoDB 컨테이너
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+  namespace: linkdo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:7.0
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongo-storage
+              mountPath: /data/db
+      volumes:
+        - name: mongo-storage
+          emptyDir: {}  # 테스트용 - Pod 재시작 시 데이터 손실
+
+---
+# Service - MongoDB 내부 접근용
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  namespace: linkdo
+spec:
+  selector:
+    app: mongo
+  ports:
+    - port: 27017
+      targetPort: 27017
+  type: ClusterIP
+
+
+
