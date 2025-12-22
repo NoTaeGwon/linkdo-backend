@@ -6,26 +6,20 @@
   - FastAPI 앱 인스턴스 생성 및 설정
   - CORS 미들웨어 설정 (프론트엔드 요청 허용)
   - MongoDB 연결 및 컬렉션 정의
-  - 라우터 등록 (tasks, edges)
+  - 라우터 등록 (tasks, edges, tags, graph)
   - 기본 라우트 및 헬스체크 API
 ================================================================
 """
 
 import os
-import numpy as np
-import google.generativeai as genai
-from typing import Literal, Optional
-from datetime import datetime
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
+from google import genai
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
-from pydantic import BaseModel
 
 # 라우터 임포트
-from routes import tasks, edges
+from routes import tasks, edges, tags, graph
 
 # 환경변수 로드
 load_dotenv()
@@ -47,14 +41,11 @@ app.add_middleware(
 
 # Gemini 설정
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+print(f"[DEBUG] GEMINI_API_KEY loaded: {GEMINI_API_KEY[:20] if GEMINI_API_KEY else 'None'}...")
+gemini_client = None
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-
-class TagSuggestionRequest(BaseModel):
-    """태그 추천 요청 모델"""
-    title: str
-    description: str = ""
-
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+    print("[DEBUG] genai.Client created successfully")
 
 # MongoDB 연결
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/linkdo")
@@ -65,16 +56,23 @@ db = client["linkdo"]
 tasks_collection = db["tasks"]
 edges_collection = db["edges"]
 
-# 라우터에 컬렉션 주입
-tasks.set_collection(tasks_collection)
+# 라우터에 컬렉션/클라이언트 주입
+tasks.set_collections(tasks_collection, edges_collection)
 edges.set_collection(edges_collection)
+tags.set_collection(tasks_collection)
+tags.set_gemini_client(gemini_client)
+graph.set_collections(tasks_collection, edges_collection)
 
 # 라우터 등록
 app.include_router(tasks.router)
 app.include_router(edges.router)
+app.include_router(tags.router)
+app.include_router(graph.router)
+
 
 @app.get("/")
 async def root():
+    """루트 엔드포인트 - API 상태 확인"""
     return {"message": "Linkdo API is running"}
 
 
@@ -86,255 +84,28 @@ def health_check():
         return {"status": "healthy", "database": "connected"}
     except Exception as e:
         return {"status": "unhealthy", "error": str(e)}
-        
-
-@app.delete("/api/tasks/{task_id}/cascade")
-def delete_task_cascade(task_id: str):
-    """
-    태스크와 연결된 엣지를 함께 삭제
-    
-    Args:
-        task_id: 삭제할 태스크의 ID
-        
-    Returns:
-        dict: 삭제 결과 (삭제된 태스크, 엣지 수)
-    """
-    # 태스크 존재 확인
-    task = tasks_collection.find_one({"id": task_id})
-    if not task:
-        raise HTTPException(status_code=404, detail="태스크를 찾을 수 없습니다")
-    
-    # 연결된 엣지 삭제 (source 또는 target이 해당 태스크인 경우)
-    edge_result = edges_collection.delete_many({
-        "$or": [
-            {"source": task_id},
-            {"target": task_id}
-        ]
-    })
-    
-    # 태스크 삭제
-    tasks_collection.delete_one({"id": task_id})
-    
-    return {
-        "message": "태스크와 연결된 엣지가 삭제되었습니다",
-        "task_id": task_id,
-        "deleted_edges_count": edge_result.deleted_count
-    }
-
-
-@app.get("/api/tags")
-def get_tags():
-    """
-    전체 태그 목록 조회 (모든 테스크에서 unique 태그 추출)
-
-    Returns:
-        list[str]: 정렬된 태그 목록
-    """
-    pipline = [
-        {"$unwind": "$tags"},
-        {"$group": {"_id": "$tags"}},
-        {"$sort": {"_id": 1}},
-    ]
-
-    result = tasks_collection.aggregate(pipline)
-    return [doc["_id"] for doc in result]
-    
-
-@app.post("/api/tags/suggest-tags")
-async def suggest_tags(request: TagSuggestionRequest):
-    """
-    LLM을 이용한 태그 추천
-
-    Args:
-        request: 테스크 제목과 설명
-    
-    Returns:
-        dist: 추천 태그 목록
-    """
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Gemini API 키가 설정되지 않았습니다")
-
-    # 기존 태그 목록 가져오기
-    existing_tags = get_tags()
-
-    # 프롬포트 생성
-    prompt = f"""당신은 할 일(Task) 관리 앱의 태그 추천 시스템입니다.
-
-사용자가 입력한 할 일에 적절한 태그를 3~5개 추천해주세요.
-
-기존에 사용중인 태그 목록: {existing_tags if existing_tags else "없음"}
-
-할 일 제목: {request.title}
-할 일 설명: {request.description if request.description else "없음"}
-
-규칙:
-1. 기존 태그가 있다면 최대한 기존 태그를 활용하세요
-2. 새로운 태그가 필요하면 간결하고 명확한 한글 태그를 만드세요
-3. 태그는 쉼표로 구분해서 출력하세요
-4. 태그만 출력하고 다른 설명은 하지 마세요
-
-예시 출력: 업무, 회의, 중요"""
-    
-    try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(prompt)
-        
-        # 응답 파싱
-        tags_text = response.text.strip()
-        tags = [tag.strip() for tag in tags_text.split(",")]
-        tags = [tag for tag in tags if tag] # 빈 태그 제거
-
-        return {"tags": tags}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"태그 추천 실패: {str(e)}")
 
 
 def get_embedding(text: str) -> list[float]:
     """
     텍스트를 임베딩 벡터로 변환
+    (tasks.py에서 import하여 사용)
 
     Args:
         text: 변환할 텍스트
     
     Returns:
-        list[float]: 임베딩 백터
+        list[float]: 임베딩 벡터
     """
-    if not GEMINI_API_KEY:
+    if not gemini_client:
         return []
 
     try:
-        result = genai.embed_content(
-            model="models/gemini-embedding-001",
-            content=text,
+        result = gemini_client.models.embed_content(
+            model="gemini-embedding-001",
+            contents=text,
         )
-        return result['embedding']
+        return result.embeddings[0].values
     except Exception as e:
         print(f"임베딩 생성 실패: {e}")
         return []
-
-
-@app.get("/api/graph")
-def get_graph():
-    """
-    그대로 데이터 통합 (tasks + edges)
-    PCA로 계산된 2D 좌표 포함
-
-    Returns:
-        dict: { tasks: [...], edges: [...] }
-    """
-    # Tasks 조회
-    tasks = list(tasks_collection.find())
-
-    # 임베딩이 있는 테스크툴로 PCA 계산
-    embeddings = []
-    tasks_with_embedding = []
-
-    for task in tasks:
-        embedding = task.get("embedding", [])
-        if embedding:
-            embeddings.append(embedding)
-            tasks_with_embedding.append(task)
-    
-    # PCA로 2D 좌표 계산
-    coordinates = {}
-    if len(embeddings) >= 2:
-        pca = PCA(n_components=2)
-        coords_2d = pca.fit_transform(np.array(embeddings))
-
-        # StandardScaler로 정규화 후 스케일링
-        scaler = StandardScaler()
-        coords_2d = scaler.fit_transform(coords_2d) * 40
-
-        for i, task in enumerate(tasks_with_embedding):
-            coordinates[task.get("id")] = {
-                "x": float(coords_2d[i][0]),
-                "y": float(coords_2d[i][1])
-            }
-
-    # Tasks 결과 생성
-    tasks_result = []
-    for task in tasks:
-        task_id = task.get("id")
-        coord = coordinates.get(task_id, {"x": 0, "y": 0})
-
-        tasks_result.append({
-            "id": task_id,
-            "title": task.get("title"),
-            "description": task.get("description"),
-            "priority": task.get("priority", "medium"),
-            "status": task.get("status", "todo"),
-            "category": task.get("category", "general"),
-            "tags": task.get("tags", []),
-            "due_date": task.get("due_date"),
-            "x": coord["x"],
-            "y": coord["y"],
-        })
-    
-    # Edges 조회
-    edges = list(edges_collection.find())
-    edges_result = []
-    for edge in edges:
-        edges_result.append({
-            "source": edge.get("source"),
-            "target": edge.get("target"),
-            "weight": edge.get("weight", 0.5),
-        })
-
-    return {"tasks": tasks_result, "edges": edges_result}
-
-
-@app.post("/api/graph/auto-arrange")
-def auto_arrange():
-    """
-    전체 태스크를 PCA로 재정렬하여 좌표 반환
-    
-    Returns:
-        dict: { positions: [{ id, x, y }, ...] }
-    """
-    tasks = list(tasks_collection.find())
-    
-    embeddings = []
-    tasks_with_embedding = []
-    
-    for task in tasks:
-        embedding = task.get("embedding", [])
-        if embedding:
-            embeddings.append(embedding)
-            tasks_with_embedding.append(task)
-    
-    positions = []
-    
-    if len(embeddings) >= 2:
-        pca = PCA(n_components=2)
-        coords_2d = pca.fit_transform(np.array(embeddings))
-        
-        # StandardScaler로 정규화 후 스케일링
-        scaler = StandardScaler()
-        coords_2d = scaler.fit_transform(coords_2d) * 40
-        
-        for i, task in enumerate(tasks_with_embedding):
-            positions.append({
-                "id": task.get("id"),
-                "x": float(coords_2d[i][0]),
-                "y": float(coords_2d[i][1])
-            })
-    else:
-        # 임베딩 2개 미만이면 기본 좌표
-        for i, task in enumerate(tasks_with_embedding):
-            positions.append({
-                "id": task.get("id"),
-                "x": float(i * 100),
-                "y": 0.0
-            })
-    
-    # 임베딩 없는 태스크는 (0, 0)
-    embedded_ids = {t.get("id") for t in tasks_with_embedding}
-    for task in tasks:
-        if task.get("id") not in embedded_ids:
-            positions.append({
-                "id": task.get("id"),
-                "x": 0.0,
-                "y": 0.0
-            })
-    
-    return {"positions": positions}

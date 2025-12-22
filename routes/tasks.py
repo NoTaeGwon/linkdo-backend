@@ -3,11 +3,12 @@
 파일명       : routes/tasks.py
 목적         : Tasks API 라우터
 설명         :
-    GET    /api/tasks       - 전체 태스크 조회
-    GET    /api/tasks/{id}  - 특정 태스크 조회
-    POST   /api/tasks       - 새 태스크 생성
-    PUT    /api/tasks/{id}  - 태스크 수정
-    DELETE /api/tasks/{id}  - 태스크 삭제
+    GET    /api/tasks              - 전체 태스크 조회
+    GET    /api/tasks/{id}         - 특정 태스크 조회
+    POST   /api/tasks              - 새 태스크 생성
+    PUT    /api/tasks/{id}         - 태스크 수정
+    DELETE /api/tasks/{id}         - 태스크 삭제
+    DELETE /api/tasks/{id}/cascade - 태스크 + 연결된 엣지 삭제
 ================================================================
 """
 
@@ -20,17 +21,20 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 # MongoDB 컬렉션
 tasks_collection = None
+edges_collection = None
 
 
-def set_collection(collection):
+def set_collections(tasks_col, edges_col):
     """
-    MongoDB 컬렉션을 주입받는 함수.
+    MongoDB 컬렉션들을 주입받는 함수.
     
     Args:
-        collection: MongoDB tasks 컬렉션 객체
+        tasks_col: MongoDB tasks 컬렉션 객체
+        edges_col: MongoDB edges 컬렉션 객체
     """
-    global tasks_collection
-    tasks_collection = collection
+    global tasks_collection, edges_collection
+    tasks_collection = tasks_col
+    edges_collection = edges_col
 
 
 @router.get("/", response_model=list[TaskResponse])
@@ -117,7 +121,7 @@ def create_task(task: TaskCreate):
 
     # 임베딩 생성 (제목 + 설명 + 태그)
     text_for_embedding = f"{task.title} {task.description or ''} {' '.join(task.tags)}"
-    from main import get_embedding, edges_collection
+    from main import get_embedding
     task_dict["embedding"] = get_embedding(text_for_embedding)
     
     tasks_collection.insert_one(task_dict)
@@ -210,4 +214,41 @@ def delete_task(task_id: str):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="태스크를 찾을 수 없습니다")
     return {"message": "태스크가 삭제되었습니다", "id": task_id}
+
+
+@router.delete("/{task_id}/cascade")
+def delete_task_cascade(task_id: str):
+    """
+    태스크와 연결된 엣지를 함께 삭제합니다.
+    
+    Args:
+        task_id: 삭제할 태스크의 ID
+        
+    Returns:
+        dict: 삭제 결과 (삭제된 태스크, 엣지 수)
+        
+    Raises:
+        HTTPException: 태스크가 존재하지 않을 때 (404)
+    """
+    # 태스크 존재 확인
+    task = tasks_collection.find_one({"id": task_id})
+    if not task:
+        raise HTTPException(status_code=404, detail="태스크를 찾을 수 없습니다")
+    
+    # 연결된 엣지 삭제 (source 또는 target이 해당 태스크인 경우)
+    edge_result = edges_collection.delete_many({
+        "$or": [
+            {"source": task_id},
+            {"target": task_id}
+        ]
+    })
+    
+    # 태스크 삭제
+    tasks_collection.delete_one({"id": task_id})
+    
+    return {
+        "message": "태스크와 연결된 엣지가 삭제되었습니다",
+        "task_id": task_id,
+        "deleted_edges_count": edge_result.deleted_count
+    }
 
