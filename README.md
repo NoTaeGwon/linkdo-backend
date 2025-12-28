@@ -7,6 +7,15 @@ Google Gemini API를 활용한 **텍스트 임베딩**과 **PCA 차원 축소**�
 
 <br>
 
+## 🌍 Live Demo
+
+| 구분 | URL |
+|------|-----|
+| **Frontend** | http://linkdo-frontend-app.s3-website.ap-northeast-2.amazonaws.com |
+| **Backend API** | AWS EKS LoadBalancer (배포 시 동적 할당) |
+
+<br>
+
 ## ✨ 주요 기능
 
 ### 🧠 AI 기반 태스크 배치
@@ -34,7 +43,7 @@ Google Gemini API를 활용한 **텍스트 임베딩**과 **PCA 차원 축소**�
 |------|------|
 | **Framework** | FastAPI |
 | **Database** | MongoDB |
-| **AI/ML** | Google Gemini API, scikit-learn (PCA) |
+| **AI/ML** | Google Gemini API (gemini-2.5-flash, gemini-embedding-001), scikit-learn (PCA) |
 | **Container** | Docker, Docker Compose |
 | **Orchestration** | Kubernetes (AWS EKS) |
 | **Cloud** | AWS (ECR, EKS, ELB) |
@@ -149,8 +158,10 @@ kubectl get service linkdo-api -n linkdo
 
 ### 텍스트 임베딩 → 2D 좌표 변환
 
+> **gemini-embedding-001**: 3,072차원 벡터 → PCA → 2D 좌표
+
 ```python
-# 1. Gemini API로 텍스트 임베딩 생성
+# 1. Gemini API로 텍스트 임베딩 생성 (3,072차원)
 text = f"{title} {description} {' '.join(tags)}"
 embedding = gemini_client.models.embed_content(
     model="gemini-embedding-001",
