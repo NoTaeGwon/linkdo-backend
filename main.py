@@ -27,12 +27,13 @@ load_dotenv()
 # FastAPI 앱 생성
 app = FastAPI(title="Linkdo API")
 
-# CORS 설정 - Vite 개발/프리뷰 서버 허용
+# CORS 설정 - 개발 서버 및 프로덕션 허용
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # Vite dev
         "http://localhost:4173",  # Vite preview
+        "http://linkdo-frontend-app.s3-website.ap-northeast-2.amazonaws.com",  # S3 배포
     ],
     allow_credentials=True,
     allow_methods=["*"],
