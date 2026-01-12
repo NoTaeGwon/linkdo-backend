@@ -27,13 +27,12 @@ load_dotenv()
 # FastAPI 앱 생성
 app = FastAPI(title="Linkdo API")
 
-# CORS 설정 - 개발 서버 및 프로덕션 허용
+# CORS 설정 - 개발 서버 허용
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # Vite dev
         "http://localhost:4173",  # Vite preview
-        "http://linkdo-frontend-app.s3-website.ap-northeast-2.amazonaws.com",  # S3 배포
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -42,11 +41,9 @@ app.add_middleware(
 
 # Gemini 설정
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-print(f"[DEBUG] GEMINI_API_KEY loaded: {GEMINI_API_KEY[:20] if GEMINI_API_KEY else 'None'}...")
 gemini_client = None
 if GEMINI_API_KEY:
     gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-    print("[DEBUG] genai.Client created successfully")
 
 # MongoDB 연결
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/linkdo")

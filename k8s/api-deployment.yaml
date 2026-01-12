@@ -1,6 +1,6 @@
 # ================================================================
 # 파일명       : api-deployment.yaml
-# 목적         : Linkdo FastAPI 백엔드 배포
+# 목적         : Linkdo FastAPI 백엔드 배포 (로컬 Kubernetes용)
 # ================================================================
 
 apiVersion: apps/v1
@@ -9,7 +9,7 @@ metadata:
   name: linkdo-api
   namespace: linkdo
 spec:
-  replicas: 2  # 가용성을 위해 2개 Pod
+  replicas: 2 # 가용성을 위해 2개 Pod
   selector:
     matchLabels:
       app: linkdo-api
@@ -20,8 +20,8 @@ spec:
     spec:
       containers:
         - name: linkdo-api
-          image: 818350161275.dkr.ecr.ap-northeast-2.amazonaws.com/linkdo-backend:latest
-          imagePullPolicy: Always  # ECR에서 이미지 Pull
+          image: linkdo-backend:latest # 로컬 이미지
+          imagePullPolicy: Never # minikube 로컬 이미지 사용
           ports:
             - containerPort: 8000
           env:
@@ -41,10 +41,16 @@ spec:
               cpu: "500m"
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
 
 ---
 # Service - API 외부 접근용 (NodePort)
@@ -59,7 +65,6 @@ spec:
   ports:
     - port: 80
       targetPort: 8000
-  type: LoadBalancer  # AWS ELB 자동 생성
-
-
+      nodePort: 30080 # 고정 포트
+  type: NodePort # 로컬 접근용
 
