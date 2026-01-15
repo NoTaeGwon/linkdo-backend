@@ -10,14 +10,13 @@
 
 import os
 from google import genai
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/tags", tags=["tags"])
 
 tasks_collection = None
 gemini_client = None
-get_workspace_id = None
 
 
 def set_collection(collection):
@@ -42,33 +41,15 @@ def set_gemini_client(client):
     gemini_client = client
 
 
-def set_workspace_dependency(dependency_func):
-    """
-    workspace_id 의존성 함수를 주입받는 함수.
-    
-    Args:
-        dependency_func: workspace_id 의존성 함수
-    """
-    global get_workspace_id
-    get_workspace_id = dependency_func
-
-
 class TagSuggestionRequest(BaseModel):
     """태그 추천 요청 모델"""
     title: str
     description: str = ""
 
 
-@router.get("/")
-def get_tags(workspace_id: str = Depends(get_workspace_id)):
+def _get_tags_for_workspace(workspace_id: str) -> list[str]:
     """
-    전체 태그 목록 조회 (해당 워크스페이스의 모든 테스크에서 unique 태그 추출)
-
-    Args:
-        workspace_id: 워크스페이스 고유 식별자
-
-    Returns:
-        list[str]: 정렬된 태그 목록
+    해당 워크스페이스의 모든 태그 목록을 조회하는 내부 함수
     """
     pipeline = [
         {"$match": {"workspace_id": workspace_id}},
@@ -76,22 +57,35 @@ def get_tags(workspace_id: str = Depends(get_workspace_id)):
         {"$group": {"_id": "$tags"}},
         {"$sort": {"_id": 1}},
     ]
-
     result = tasks_collection.aggregate(pipeline)
     return [doc["_id"] for doc in result]
+
+
+@router.get("/")
+def get_tags(x_workspace_id: str = Header(..., alias="X-Workspace-ID")):
+    """
+    전체 태그 목록 조회 (해당 워크스페이스의 모든 테스크에서 unique 태그 추출)
+
+    Args:
+        x_workspace_id: 워크스페이스 고유 식별자 (헤더)
+
+    Returns:
+        list[str]: 정렬된 태그 목록
+    """
+    return _get_tags_for_workspace(x_workspace_id)
 
 
 @router.post("/suggest-tags")
 async def suggest_tags(
     request: TagSuggestionRequest,
-    workspace_id: str = Depends(get_workspace_id),
+    x_workspace_id: str = Header(..., alias="X-Workspace-ID"),
 ):
     """
     LLM을 이용한 태그 추천
 
     Args:
         request: 테스크 제목과 설명
-        workspace_id: 워크스페이스 고유 식별자
+        x_workspace_id: 워크스페이스 고유 식별자 (헤더)
     
     Returns:
         dict: 추천 태그 목록
@@ -100,7 +94,7 @@ async def suggest_tags(
         raise HTTPException(status_code=500, detail="Gemini API 키가 설정되지 않았습니다")
 
     # 기존 태그 목록 가져오기 (해당 워크스페이스)
-    existing_tags = get_tags(workspace_id)
+    existing_tags = _get_tags_for_workspace(x_workspace_id)
 
     # 프롬프트 생성
     prompt = f"""당신은 할 일(Task) 관리 앱의 태그 추천 시스템입니다.

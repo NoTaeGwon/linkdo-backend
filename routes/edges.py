@@ -9,13 +9,12 @@
 ================================================================
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Header
 from models import EdgeCreate, EdgeResponse
 
 router = APIRouter(prefix="/api/edges", tags=["edges"])
 
 edges_collection = None
-get_workspace_id = None
 
 
 def set_collection(collection):
@@ -29,28 +28,19 @@ def set_collection(collection):
     edges_collection = collection
 
 
-def set_workspace_dependency(dependency_func):
-    """
-    workspace_id 의존성 함수를 주입받는 함수.
-    
-    Args:
-        dependency_func: workspace_id 의존성 함수
-    """
-    global get_workspace_id
-    get_workspace_id = dependency_func
-
-
 @router.get("/", response_model=list[EdgeResponse])
-def get_all_edges(workspace_id: str = Depends(get_workspace_id)):
+def get_all_edges(x_workspace_id: str = Header(..., alias="X-Workspace-ID")):
     """
     전체 엣지 목록을 조회
     
     Args:
-        workspace_id: 워크스페이스 고유 식별자
+        x_workspace_id: 워크스페이스 고유 식별자 (헤더)
     
     Returns:
         list[EdgeResponse]: 모든 엣지 목록
     """
+    workspace_id = x_workspace_id
+    
     edges = list(edges_collection.find({"workspace_id": workspace_id}))
     result = []
 
@@ -68,18 +58,20 @@ def get_all_edges(workspace_id: str = Depends(get_workspace_id)):
 @router.post("/", response_model=EdgeResponse)
 def create_edge(
     edge: EdgeCreate,
-    workspace_id: str = Depends(get_workspace_id),
+    x_workspace_id: str = Header(..., alias="X-Workspace-ID"),
 ):
     """
     새 엣지를 생성
 
     Args:
         edge: 생성할 엣지 정보
-        workspace_id: 워크스페이스 고유 식별자
+        x_workspace_id: 워크스페이스 고유 식별자 (헤더)
     
     Returns:
         EdgeResponse: 생성된 엣지 정보
     """
+    workspace_id = x_workspace_id
+    
     # 엣지 중복 연결 체크 (같은 workspace 내에서)
     existing = edges_collection.find_one({
         "workspace_id": workspace_id,
@@ -99,7 +91,7 @@ def create_edge(
 def delete_edge(
     source: str,
     target: str,
-    workspace_id: str = Depends(get_workspace_id),
+    x_workspace_id: str = Header(..., alias="X-Workspace-ID"),
 ):
     """
     엣지를 삭제
@@ -107,7 +99,7 @@ def delete_edge(
     Args:
         source: 시작 노드(태스크) ID
         target: 끝 노드(태스크) ID
-        workspace_id: 워크스페이스 고유 식별자
+        x_workspace_id: 워크스페이스 고유 식별자 (헤더)
     
     Returns:
         dict: 삭제 결과 메시지
@@ -115,6 +107,8 @@ def delete_edge(
     Raises:
         HTTPException: 엣지가 존재하지 않을 때 (404)
     """
+    workspace_id = x_workspace_id
+    
     result = edges_collection.delete_one({
         "workspace_id": workspace_id,
         "source": source,

@@ -11,13 +11,12 @@
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Header
 
 router = APIRouter(prefix="/api/graph", tags=["graph"])
 
 tasks_collection = None
 edges_collection = None
-get_workspace_id = None
 
 
 def set_collections(tasks_col, edges_col):
@@ -33,29 +32,20 @@ def set_collections(tasks_col, edges_col):
     edges_collection = edges_col
 
 
-def set_workspace_dependency(dependency_func):
-    """
-    workspace_id 의존성 함수를 주입받는 함수.
-    
-    Args:
-        dependency_func: workspace_id 의존성 함수
-    """
-    global get_workspace_id
-    get_workspace_id = dependency_func
-
-
 @router.get("/")
-def get_graph(workspace_id: str = Depends(get_workspace_id)):
+def get_graph(x_workspace_id: str = Header(..., alias="X-Workspace-ID")):
     """
     그래프 데이터 통합 (tasks + edges)
     PCA로 계산된 2D 좌표 포함
 
     Args:
-        workspace_id: 워크스페이스 고유 식별자
+        x_workspace_id: 워크스페이스 고유 식별자 (헤더)
 
     Returns:
         dict: { tasks: [...], edges: [...] }
     """
+    workspace_id = x_workspace_id
+    
     # Tasks 조회 (해당 워크스페이스만)
     tasks = list(tasks_collection.find({"workspace_id": workspace_id}))
 
@@ -118,16 +108,18 @@ def get_graph(workspace_id: str = Depends(get_workspace_id)):
 
 
 @router.post("/auto-arrange")
-def auto_arrange(workspace_id: str = Depends(get_workspace_id)):
+def auto_arrange(x_workspace_id: str = Header(..., alias="X-Workspace-ID")):
     """
     전체 태스크를 PCA로 재정렬하여 좌표 반환
     
     Args:
-        workspace_id: 워크스페이스 고유 식별자
+        x_workspace_id: 워크스페이스 고유 식별자 (헤더)
 
     Returns:
         dict: { positions: [{ id, x, y }, ...] }
     """
+    workspace_id = x_workspace_id
+    
     tasks = list(tasks_collection.find({"workspace_id": workspace_id}))
     
     embeddings = []
