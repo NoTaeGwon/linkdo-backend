@@ -12,11 +12,16 @@
 """
 
 import os
+import logging
 from google import genai
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # 라우터 임포트
 from routes import tasks, edges, tags, graph
@@ -26,6 +31,14 @@ load_dotenv()
 
 # FastAPI 앱 생성
 app = FastAPI(title="Linkdo API")
+
+# 프록시 헤더 미들웨어 추가 (개발/디버깅용)
+@app.middleware("http")
+async def log_proxy_headers(request: Request, call_next):
+    logger.info(f"Request path: {request.url.path}")
+    logger.info(f"Request headers: {request.headers}")
+    response = await call_next(request)
+    return response
 
 # CORS 설정 - 개발 서버 허용
 app.add_middleware(
@@ -69,8 +82,9 @@ app.include_router(graph.router)
 
 
 @app.get("/")
-async def root():
-    """루트 엔드포인트 - API 상태 확인"""
+async def root(request: Request):
+    """루트 엔드포인트 - API 상태 확인 및 헤더 로깅"""
+    logger.info(f"Root endpoint hit. Headers: {request.headers}")
     return {"message": "Linkdo API is running"}
 
 
@@ -82,6 +96,16 @@ def health_check():
         return {"status": "healthy", "database": "connected"}
     except Exception as e:
         return {"status": "unhealthy", "error": str(e)}
+
+
+@app.get("/debug/gemini")
+def debug_gemini():
+    """[임시] Gemini 클라이언트 상태 확인"""
+    return {
+        "api_key_exists": bool(GEMINI_API_KEY),
+        "api_key_preview": GEMINI_API_KEY[:10] + "..." if GEMINI_API_KEY else None,
+        "client_initialized": gemini_client is not None,
+    }
 
 
 def get_embedding(text: str) -> list[float]:

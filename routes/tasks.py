@@ -6,7 +6,7 @@
     GET    /api/tasks              - 전체 태스크 조회
     GET    /api/tasks/{id}         - 특정 태스크 조회
     POST   /api/tasks              - 새 태스크 생성
-    PUT    /api/tasks/{id}         - 태스크 수정
+    PATCH  /api/tasks/{id}         - 태스크 부분 수정
     DELETE /api/tasks/{id}         - 태스크 삭제
     DELETE /api/tasks/{id}/cascade - 태스크 + 연결된 엣지 삭제
 ================================================================
@@ -157,14 +157,14 @@ def create_task(task: TaskCreate):
     return task_dict
 
 
-@router.put("/{task_id}", response_model=TaskResponse)
+@router.patch("/{task_id}", response_model=TaskResponse)
 def update_task(task_id: str, task_update: TaskUpdate):
     """
-    태스크를 수정합니다.
+    태스크를 부분 수정합니다.
     
     Args:
         task_id: 수정할 태스크의 ID
-        task_update: 수정할 필드들
+        task_update: 수정할 필드들 (None이 아닌 필드만 적용)
         
     Returns:
         TaskResponse: 수정된 태스크 정보
