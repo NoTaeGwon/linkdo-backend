@@ -13,15 +13,15 @@
 """
 
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from models import TaskCreate, TaskUpdate, TaskResponse
 
-# 라우터 생성
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
-# MongoDB 컬렉션
 tasks_collection = None
 edges_collection = None
+
+get_workspace_id = None
 
 
 def set_collections(tasks_col, edges_col):
@@ -36,25 +36,42 @@ def set_collections(tasks_col, edges_col):
     tasks_collection = tasks_col
     edges_collection = edges_col
 
+def set_workspace_dependency(dependency_func):
+    """
+    workspace_id 의존성 함수를 주입받는 함수.
+    
+    Args:
+        dependency_func: workspace_id 의존성 함수
+    """
+    global get_workspace_id
+    get_workspace_id = dependency_func
+
+
 
 @router.get("/", response_model=list[TaskResponse])
-def get_all_tasks(tag: Optional[str] = None):
+def get_all_tasks(
+    workspace_id: str = Depends(get_workspace_id),
+    tag: Optional[str] = None):
     """
     전체 태스크 목록을 조회합니다.
 
     Args:
+        workspace_id: 워크스페이스 고유 식별자
         tag: 필터링할 태그(선택)
     
     Returns:
         list[TaskResponse]: 모든 태스크 목록
     """
     # 태그 필터링
-    query = {"tags": tag} if tag else {}
+    query = {"workspace_id": workspace_id}
+    if tag:
+        query["tags"] = tag
 
     tasks = list(tasks_collection.find(query))
     result = []
     for task in tasks:
         task_dict = {
+            "workspace_id": task.get("workspace_id"),
             "id": task.get("id"),
             "title": task.get("title"),
             "description": task.get("description"),
@@ -70,7 +87,10 @@ def get_all_tasks(tag: Optional[str] = None):
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
-def get_task(task_id: str):
+def get_task(
+    task_id: str,
+    workspace_id: str = Depends(get_workspace_id),
+):
     """
     특정 태스크를 조회합니다.
     
@@ -83,10 +103,11 @@ def get_task(task_id: str):
     Raises:
         HTTPException: 태스크가 존재하지 않을 때 (404)
     """
-    task = tasks_collection.find_one({"id": task_id})
+    task = tasks_collection.find_one({"id": task_id, "workspace_id": workspace_id})
     if not task:
         raise HTTPException(status_code=404, detail="태스크를 찾을 수 없습니다")
     return {
+        "workspace_id": task.get("workspace_id"),
         "id": task.get("id"),
         "title": task.get("title"),
         "description": task.get("description"),
@@ -100,7 +121,10 @@ def get_task(task_id: str):
 
 
 @router.post("/", response_model=TaskResponse)
-def create_task(task: TaskCreate):
+def create_task(
+    task: TaskCreate,
+    workspace_id: str = Depends(get_workspace_id),
+):
     """
     새 태스크를 생성합니다.
     동일한 태그를 가진 기존 태스크들과 엣지를 자동 연결합니다.
@@ -118,6 +142,7 @@ def create_task(task: TaskCreate):
         raise HTTPException(status_code=400, detail="이미 존재하는 ID입니다")
     
     task_dict = task.model_dump()
+    task_dict["workspace_id"] = workspace_id
 
     # 임베딩 생성 (제목 + 설명 + 태그)
     text_for_embedding = f"{task.title} {task.description or ''} {' '.join(task.tags)}"
@@ -128,8 +153,9 @@ def create_task(task: TaskCreate):
     
     # 태그 기반 엣지 자동 연결
     if task.tags:
-        # 동일 태그를 가진 기존 태스크 찾기
+        # 동일 태그를 가진 기존 태스크 찾기 (같은 워크스페이스 내에서)
         existing_tasks = tasks_collection.find({
+            "workspace_id": workspace_id,
             "id": {"$ne": task.id},  # 자기 자신 제외
             "tags": {"$in": task.tags}  # 태그 중 하나라도 일치
         })
@@ -139,8 +165,9 @@ def create_task(task: TaskCreate):
             common_tags = set(task.tags) & set(existing_task.get("tags", []))
             weight = len(common_tags) / max(len(task.tags), len(existing_task.get("tags", [])))
             
-            # 엣지 생성 (중복 방지)
+            # 엣지 생성 (중복 방지 - 같은 워크스페이스 내에서)
             edge_exists = edges_collection.find_one({
+                "workspace_id": workspace_id,
                 "$or": [
                     {"source": task.id, "target": existing_task["id"]},
                     {"source": existing_task["id"], "target": task.id}
@@ -149,6 +176,7 @@ def create_task(task: TaskCreate):
             
             if not edge_exists:
                 edges_collection.insert_one({
+                    "workspace_id": workspace_id,
                     "source": task.id,
                     "target": existing_task["id"],
                     "weight": round(weight, 2)
@@ -158,7 +186,11 @@ def create_task(task: TaskCreate):
 
 
 @router.patch("/{task_id}", response_model=TaskResponse)
-def update_task(task_id: str, task_update: TaskUpdate):
+def update_task(
+    task_id: str,
+    task_update: TaskUpdate,
+    workspace_id: str = Depends(get_workspace_id),
+):
     """
     태스크를 부분 수정합니다.
     
@@ -172,18 +204,20 @@ def update_task(task_id: str, task_update: TaskUpdate):
     Raises:
         HTTPException: 태스크가 존재하지 않을 때 (404)
     """
-    existing = tasks_collection.find_one({"id": task_id})
+    existing = tasks_collection.find_one({"id": task_id, "workspace_id": workspace_id})
     if not existing:
         raise HTTPException(status_code=404, detail="태스크를 찾을 수 없습니다")
     
     # None이 아닌 필드만 업데이트
     update_data = {k: v for k, v in task_update.model_dump().items() if v is not None}
-    
+    update_data["workspace_id"] = workspace_id
+
     if update_data:
         tasks_collection.update_one({"id": task_id}, {"$set": update_data})
     
-    updated = tasks_collection.find_one({"id": task_id})
+    updated = tasks_collection.find_one({"id": task_id, "workspace_id": workspace_id})
     return {
+        "workspace_id": updated.get("workspace_id"),
         "id": updated.get("id"),
         "title": updated.get("title"),
         "description": updated.get("description"),
@@ -197,7 +231,10 @@ def update_task(task_id: str, task_update: TaskUpdate):
 
 
 @router.delete("/{task_id}")
-def delete_task(task_id: str):
+def delete_task(
+    task_id: str,
+    workspace_id: str = Depends(get_workspace_id),
+):
     """
     태스크를 삭제합니다.
     
@@ -210,14 +247,17 @@ def delete_task(task_id: str):
     Raises:
         HTTPException: 태스크가 존재하지 않을 때 (404)
     """
-    result = tasks_collection.delete_one({"id": task_id})
+    result = tasks_collection.delete_one({"id": task_id, "workspace_id": workspace_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="태스크를 찾을 수 없습니다")
     return {"message": "태스크가 삭제되었습니다", "id": task_id}
 
 
 @router.delete("/{task_id}/cascade")
-def delete_task_cascade(task_id: str):
+def delete_task_cascade(
+    task_id: str,
+    workspace_id: str = Depends(get_workspace_id),
+):
     """
     태스크와 연결된 엣지를 함께 삭제합니다.
     
@@ -231,12 +271,13 @@ def delete_task_cascade(task_id: str):
         HTTPException: 태스크가 존재하지 않을 때 (404)
     """
     # 태스크 존재 확인
-    task = tasks_collection.find_one({"id": task_id})
+    task = tasks_collection.find_one({"id": task_id, "workspace_id": workspace_id})
     if not task:
         raise HTTPException(status_code=404, detail="태스크를 찾을 수 없습니다")
     
-    # 연결된 엣지 삭제 (source 또는 target이 해당 태스크인 경우)
+    # 연결된 엣지 삭제 (같은 워크스페이스 내에서 source 또는 target이 해당 태스크인 경우)
     edge_result = edges_collection.delete_many({
+        "workspace_id": workspace_id,
         "$or": [
             {"source": task_id},
             {"target": task_id}

@@ -10,17 +10,14 @@
 
 import os
 from google import genai
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
-# 라우터 생성
 router = APIRouter(prefix="/api/tags", tags=["tags"])
 
-# MongoDB 컬렉션
 tasks_collection = None
-
-# Gemini 클라이언트
 gemini_client = None
+get_workspace_id = None
 
 
 def set_collection(collection):
@@ -45,6 +42,17 @@ def set_gemini_client(client):
     gemini_client = client
 
 
+def set_workspace_dependency(dependency_func):
+    """
+    workspace_id 의존성 함수를 주입받는 함수.
+    
+    Args:
+        dependency_func: workspace_id 의존성 함수
+    """
+    global get_workspace_id
+    get_workspace_id = dependency_func
+
+
 class TagSuggestionRequest(BaseModel):
     """태그 추천 요청 모델"""
     title: str
@@ -52,14 +60,18 @@ class TagSuggestionRequest(BaseModel):
 
 
 @router.get("/")
-def get_tags():
+def get_tags(workspace_id: str = Depends(get_workspace_id)):
     """
-    전체 태그 목록 조회 (모든 테스크에서 unique 태그 추출)
+    전체 태그 목록 조회 (해당 워크스페이스의 모든 테스크에서 unique 태그 추출)
+
+    Args:
+        workspace_id: 워크스페이스 고유 식별자
 
     Returns:
         list[str]: 정렬된 태그 목록
     """
     pipeline = [
+        {"$match": {"workspace_id": workspace_id}},
         {"$unwind": "$tags"},
         {"$group": {"_id": "$tags"}},
         {"$sort": {"_id": 1}},
@@ -70,12 +82,16 @@ def get_tags():
 
 
 @router.post("/suggest-tags")
-async def suggest_tags(request: TagSuggestionRequest):
+async def suggest_tags(
+    request: TagSuggestionRequest,
+    workspace_id: str = Depends(get_workspace_id),
+):
     """
     LLM을 이용한 태그 추천
 
     Args:
         request: 테스크 제목과 설명
+        workspace_id: 워크스페이스 고유 식별자
     
     Returns:
         dict: 추천 태그 목록
@@ -83,8 +99,8 @@ async def suggest_tags(request: TagSuggestionRequest):
     if not gemini_client:
         raise HTTPException(status_code=500, detail="Gemini API 키가 설정되지 않았습니다")
 
-    # 기존 태그 목록 가져오기
-    existing_tags = get_tags()
+    # 기존 태그 목록 가져오기 (해당 워크스페이스)
+    existing_tags = get_tags(workspace_id)
 
     # 프롬프트 생성
     prompt = f"""당신은 할 일(Task) 관리 앱의 태그 추천 시스템입니다.
@@ -118,4 +134,3 @@ async def suggest_tags(request: TagSuggestionRequest):
         return {"tags": tags}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"태그 추천 실패: {str(e)}")
-

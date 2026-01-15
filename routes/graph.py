@@ -11,14 +11,13 @@
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-# 라우터 생성
 router = APIRouter(prefix="/api/graph", tags=["graph"])
 
-# MongoDB 컬렉션
 tasks_collection = None
 edges_collection = None
+get_workspace_id = None
 
 
 def set_collections(tasks_col, edges_col):
@@ -34,17 +33,31 @@ def set_collections(tasks_col, edges_col):
     edges_collection = edges_col
 
 
+def set_workspace_dependency(dependency_func):
+    """
+    workspace_id 의존성 함수를 주입받는 함수.
+    
+    Args:
+        dependency_func: workspace_id 의존성 함수
+    """
+    global get_workspace_id
+    get_workspace_id = dependency_func
+
+
 @router.get("/")
-def get_graph():
+def get_graph(workspace_id: str = Depends(get_workspace_id)):
     """
     그래프 데이터 통합 (tasks + edges)
     PCA로 계산된 2D 좌표 포함
 
+    Args:
+        workspace_id: 워크스페이스 고유 식별자
+
     Returns:
         dict: { tasks: [...], edges: [...] }
     """
-    # Tasks 조회
-    tasks = list(tasks_collection.find())
+    # Tasks 조회 (해당 워크스페이스만)
+    tasks = list(tasks_collection.find({"workspace_id": workspace_id}))
 
     # 임베딩이 있는 테스크들로 PCA 계산
     embeddings = []
@@ -91,8 +104,8 @@ def get_graph():
             "y": coord["y"],
         })
     
-    # Edges 조회
-    edges = list(edges_collection.find())
+    # Edges 조회 (해당 워크스페이스만)
+    edges = list(edges_collection.find({"workspace_id": workspace_id}))
     edges_result = []
     for edge in edges:
         edges_result.append({
@@ -105,14 +118,17 @@ def get_graph():
 
 
 @router.post("/auto-arrange")
-def auto_arrange():
+def auto_arrange(workspace_id: str = Depends(get_workspace_id)):
     """
     전체 태스크를 PCA로 재정렬하여 좌표 반환
     
+    Args:
+        workspace_id: 워크스페이스 고유 식별자
+
     Returns:
         dict: { positions: [{ id, x, y }, ...] }
     """
-    tasks = list(tasks_collection.find())
+    tasks = list(tasks_collection.find({"workspace_id": workspace_id}))
     
     embeddings = []
     tasks_with_embedding = []
@@ -159,4 +175,3 @@ def auto_arrange():
             })
     
     return {"positions": positions}
-

@@ -15,7 +15,7 @@ import os
 import logging
 from google import genai
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 
@@ -106,6 +106,20 @@ def debug_gemini():
         "api_key_preview": GEMINI_API_KEY[:10] + "..." if GEMINI_API_KEY else None,
         "client_initialized": gemini_client is not None,
     }
+
+def get_workspace_id(x_workspace_id: str = Header(...)) -> str:
+    """
+    요청 해더에서 workspace_id를 추출
+    없으면 400 에러 반환
+    """
+    if not x_workspace_id:
+        raise HTTPException(status_code=400, detail="X-Workspace-ID 헤더가 필요합니다")
+    return x_workspace_id
+
+tasks.set_workspace_dependency(get_workspace_id)
+edges.set_workspace_dependency(get_workspace_id)
+tags.set_workspace_dependency(get_workspace_id)
+graph.set_workspace_dependency(get_workspace_id)
 
 
 def get_embedding(text: str) -> list[float]:

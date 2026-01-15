@@ -44,6 +44,7 @@ class TaskCreate(BaseModel):
         status: 상태 (기본값: todo)
         category: 카테고리 (기본값: general)
         tags: 태그 (필수)
+        due_date: 마감일 (선택)
     """
     id: str
     title: str
@@ -66,6 +67,7 @@ class TaskUpdate(BaseModel):
         status: 상태
         category: 카테고리
         tags: 태그
+        due_date: 마감일
     """
     title: Optional[str] = None
     description: Optional[str] = None
@@ -80,6 +82,7 @@ class TaskResponse(BaseModel):
     API 응답용 태스크 모델
     
     Attributes:
+        workspace_id: 워크스페이스 고유 식별자
         id: 태스크 고유 식별자
         title: 태스크 제목
         description: 태스크 설명
@@ -87,7 +90,9 @@ class TaskResponse(BaseModel):
         status: 상태
         category: 카테고리
         tags: 태그
+        due_date: 마감일
     """
+    workspace_id: str
     id: str
     title: str
     description: Optional[str] = None
@@ -121,13 +126,12 @@ class EdgeResponse(BaseModel):
     API 응답용 엣지 모델
     
     Attributes:
+        workspace_id: 워크스페이스 고유 식별자
         source: 시작 노드(태스크)의 ID
         target: 끝 노드(태스크)의 ID
         weight: 연관도
-    
-    Note:
-        엣지는 source + target 조합으로 유일하게 식별됩니다.
     """
+    workspace_id: str
     source: str
     target: str
     weight: float
