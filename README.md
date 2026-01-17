@@ -7,15 +7,6 @@ Google Gemini API를 활용한 **텍스트 임베딩**과 **PCA 차원 축소**�
 
 <br>
 
-## 🌍 Live Demo
-
-| 구분 | URL |
-|------|-----|
-| **Frontend** | http://linkdo-frontend-app.s3-website.ap-northeast-2.amazonaws.com |
-| **Backend API** | AWS EKS LoadBalancer (배포 시 동적 할당) |
-
-<br>
-
 ## ✨ 주요 기능
 
 ### 🧠 AI 기반 태스크 배치
@@ -35,18 +26,22 @@ Google Gemini API를 활용한 **텍스트 임베딩**과 **PCA 차원 축소**�
 - 전체 태스크를 PCA로 재계산하여 **최적의 배치** 제공
 - StandardScaler로 정규화하여 일관된 시각화
 
+### 🔐 Workspace 기반 데이터 분리
+- 각 사용자/브라우저별 **독립적인 데이터 공간** 제공
+- `X-Workspace-ID` 헤더로 데이터 격리
+
 <br>
 
 ## 🛠️ 기술 스택
 
 | 영역 | 기술 |
 |------|------|
-| **Framework** | FastAPI |
-| **Database** | MongoDB |
-| **AI/ML** | Google Gemini API (gemini-2.5-flash, gemini-embedding-001), scikit-learn (PCA) |
+| **Framework** | FastAPI (Python 3.11) |
+| **Database** | MongoDB 7.0 |
+| **AI/ML** | Google Gemini API (gemini-2.5-flash, text-embedding-004), scikit-learn (PCA) |
 | **Container** | Docker, Docker Compose |
-| **Orchestration** | Kubernetes (AWS EKS) |
-| **Cloud** | AWS (ECR, EKS, ELB) |
+| **Orchestration** | Kubernetes (minikube / AWS EKS) |
+| **Cloud** | AWS (ECR, EKS, S3) |
 
 <br>
 
@@ -69,8 +64,9 @@ linkdo-backend/
 │   ├── edges.py         # 엣지 CRUD API
 │   ├── tags.py          # 태그 조회/추천 API
 │   └── graph.py         # 그래프 데이터/자동정렬 API
-├── k8s/                 # Kubernetes 매니페스트
+├── k8s/                  # Kubernetes 매니페스트
 │   ├── namespace.yaml
+│   ├── secrets.yaml
 │   ├── api-deployment.yaml
 │   └── mongo-deployment.yaml
 ├── Dockerfile
@@ -82,33 +78,40 @@ linkdo-backend/
 
 ## 📡 API 엔드포인트
 
+### 🔑 인증
+모든 API 요청에 `X-Workspace-ID` 헤더가 **필수**입니다.
+
+```bash
+curl -H "X-Workspace-ID: your-workspace-id" http://localhost:8080/api/tasks/
+```
+
 ### Tasks
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/tasks` | 전체 태스크 조회 |
+| `GET` | `/api/tasks/` | 전체 태스크 조회 |
 | `GET` | `/api/tasks/{id}` | 특정 태스크 조회 |
-| `POST` | `/api/tasks` | 태스크 생성 (임베딩 + 자동 엣지 연결) |
-| `PUT` | `/api/tasks/{id}` | 태스크 수정 |
+| `POST` | `/api/tasks/` | 태스크 생성 (임베딩 + 자동 엣지 연결) |
+| `PATCH` | `/api/tasks/{id}` | 태스크 부분 수정 |
 | `DELETE` | `/api/tasks/{id}` | 태스크 삭제 |
 | `DELETE` | `/api/tasks/{id}/cascade` | 태스크 + 연결된 엣지 삭제 |
 
 ### Edges
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/edges` | 전체 엣지 조회 |
-| `POST` | `/api/edges` | 엣지 생성 |
-| `DELETE` | `/api/edges/{source}/{target}` | 엣지 삭제 |
+| `GET` | `/api/edges/` | 전체 엣지 조회 |
+| `POST` | `/api/edges/` | 엣지 생성 |
+| `DELETE` | `/api/edges/{id}` | 엣지 삭제 |
 
 ### Tags
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/tags` | 모든 태그 목록 |
+| `GET` | `/api/tags/` | 모든 태그 목록 |
 | `POST` | `/api/tags/suggest-tags` | AI 태그 추천 |
 
 ### Graph
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/graph` | 그래프 데이터 (tasks + edges + 좌표) |
+| `GET` | `/api/graph/` | 그래프 데이터 (tasks + edges + 좌표) |
 | `POST` | `/api/graph/auto-arrange` | PCA 기반 자동 정렬 |
 
 <br>
@@ -135,7 +138,30 @@ uvicorn main:app --reload --port 8000
 docker-compose up -d
 ```
 
-### 3. Kubernetes (AWS EKS)
+### 3. Kubernetes (minikube) - 로컬
+
+```bash
+# minikube 시작
+minikube start
+
+# minikube Docker 환경 연결
+minikube docker-env | Invoke-Expression  # PowerShell
+# eval $(minikube docker-env)            # Linux/Mac
+
+# Docker 이미지 빌드
+docker build -t linkdo-backend:latest .
+
+# 리소스 배포
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/secrets.yaml
+kubectl apply -f k8s/mongo-deployment.yaml
+kubectl apply -f k8s/api-deployment.yaml
+
+# 포트포워딩 (localhost:8080으로 접근)
+kubectl port-forward svc/linkdo-api 8080:80 -n linkdo
+```
+
+### 4. Kubernetes (AWS EKS)
 
 ```bash
 # 클러스터 생성
@@ -158,13 +184,13 @@ kubectl get service linkdo-api -n linkdo
 
 ### 텍스트 임베딩 → 2D 좌표 변환
 
-> **gemini-embedding-001**: 3,072차원 벡터 → PCA → 2D 좌표
+> **text-embedding-004**: 768차원 벡터 → PCA → 2D 좌표
 
 ```python
-# 1. Gemini API로 텍스트 임베딩 생성 (3,072차원)
+# 1. Gemini API로 텍스트 임베딩 생성 (768차원)
 text = f"{title} {description} {' '.join(tags)}"
 embedding = gemini_client.models.embed_content(
-    model="gemini-embedding-001",
+    model="text-embedding-004",
     contents=text
 )
 
@@ -183,7 +209,8 @@ coords_2d = scaler.fit_transform(coords_2d) * 40
 # 공통 태그가 있는 기존 태스크 검색
 existing_tasks = tasks_collection.find({
     "id": {"$ne": new_task.id},
-    "tags": {"$in": new_task.tags}
+    "tags": {"$in": new_task.tags},
+    "workspace_id": workspace_id  # 같은 workspace 내에서만
 })
 
 # 가중치 계산 및 엣지 생성
@@ -193,7 +220,8 @@ for task in existing_tasks:
     edges_collection.insert_one({
         "source": new_task.id,
         "target": task.id,
-        "weight": weight
+        "weight": weight,
+        "workspace_id": workspace_id
     })
 ```
 
@@ -204,24 +232,27 @@ for task in existing_tasks:
 ### Task
 ```typescript
 {
-  id: string;           // 고유 식별자
-  title: string;        // 제목
-  description?: string; // 설명
+  id: string;            // 고유 식별자
+  workspace_id: string;  // 워크스페이스 ID
+  title: string;         // 제목
+  description?: string;  // 설명
   priority: "low" | "medium" | "high" | "critical";
   status: "todo" | "in-progress" | "done";
-  category: string;     // 카테고리
-  tags: string[];       // 태그 배열
-  embedding: number[];  // 임베딩 벡터
-  due_date?: datetime;  // 마감일
+  category: string;      // 카테고리
+  tags: string[];        // 태그 배열
+  embedding: number[];   // 임베딩 벡터
+  due_date?: datetime;   // 마감일
 }
 ```
 
 ### Edge
 ```typescript
 {
-  source: string;  // 시작 태스크 ID
-  target: string;  // 끝 태스크 ID
-  weight: number;  // 연관도 (0~1)
+  id: string;            // 고유 식별자
+  workspace_id: string;  // 워크스페이스 ID
+  source: string;        // 시작 태스크 ID
+  target: string;        // 끝 태스크 ID
+  weight: number;        // 연관도 (0~1)
 }
 ```
 
@@ -244,9 +275,16 @@ for task in existing_tasks:
 
 <br>
 
+## 🔗 관련 저장소
+
+| 저장소 | 설명 |
+|--------|------|
+| [linkdo-frontend](https://github.com/your-username/linkdo-frontend) | React 기반 프론트엔드 |
+
+<br>
+
 ## 📄 라이선스
 
 MIT License
 
 <br>
-
