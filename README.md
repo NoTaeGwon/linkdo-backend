@@ -68,7 +68,8 @@ linkdo-backend/
 │   ├── namespace.yaml
 │   ├── secrets.yaml
 │   ├── api-deployment.yaml
-│   └── mongo-deployment.yaml
+│   ├── mongo-deployment.yaml
+│   └── ingress.yaml      # NGINX Ingress 설정
 ├── Dockerfile
 ├── docker-compose.yml
 └── requirements.txt
@@ -159,6 +160,28 @@ kubectl apply -f k8s/api-deployment.yaml
 
 # 포트포워딩 (localhost:8080으로 접근)
 kubectl port-forward svc/linkdo-api 8080:80 -n linkdo
+```
+
+### 3-1. Ingress 설정 (도메인 기반 접근)
+
+```bash
+# NGINX Ingress Controller 활성화
+minikube addons enable ingress
+
+# Ingress 리소스 배포
+kubectl apply -f k8s/ingress.yaml
+
+# hosts 파일에 도메인 추가 (관리자 권한 필요)
+# Windows: C:\Windows\System32\drivers\etc\hosts
+# Linux/Mac: /etc/hosts
+# 아래 내용 추가:
+127.0.0.1 api.linkdo.local
+
+# minikube tunnel 실행 (터미널 유지 필요)
+minikube tunnel
+
+# 이제 도메인으로 접근 가능
+curl http://api.linkdo.local/api/tasks/ -H "X-Workspace-ID: test"
 ```
 
 ### 4. Kubernetes (AWS EKS)
