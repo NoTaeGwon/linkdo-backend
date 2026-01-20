@@ -1,0 +1,45 @@
+# Ingress 리소스 - NGINX를 통해 외부 트래픽을 내부 서비스로 라우팅
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: linkdo-ingress
+  namespace: linkdo
+  annotations:
+    # NGINX Ingress Controller 사용
+    kubernetes.io/ingress.class: nginx
+    # CORS 설정 (프론트엔드에서 API 호출 허용)
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Content-Type, X-Workspace-ID"
+spec:
+  ingressClassName: nginx
+  rules:
+    # ========================================
+    # 백엔드 API: api.linkdo.local
+    # ========================================
+    - host: api.linkdo.local
+      http:
+        paths:
+          # 모든 API 요청 → linkdo-api 서비스
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: linkdo-api
+                port:
+                  number: 80
+
+    # ========================================
+    # 프론트엔드: linkdo.local (나중에 추가)
+    # ========================================
+    # - host: linkdo.local
+    #   http:
+    #     paths:
+    #       - path: /
+    #         pathType: Prefix
+    #         backend:
+    #           service:
+    #             name: linkdo-frontend
+    #             port:
+    #               number: 80
