@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="internetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="vercelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#000000;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#333333;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="awsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF9900;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFB84D;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="k3sGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFC61C;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFD84D;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="apiGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#11998e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#38ef7d;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="mongoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4DB33D;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6FCF5A;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="traefikGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#24A1C1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#37C4E6;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-opacity="0.2"/>
+    </filter>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#8b949e"/>
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="600" fill="#0d1117"/>
+  
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="20" font-weight="bold">AWS EC2 + k3s Deployment Architecture</text>
+  
+  <!-- Internet Cloud -->
+  <rect x="250" y="50" width="300" height="50" rx="25" fill="url(#internetGrad)" filter="url(#shadow)"/>
+  <text x="400" y="82" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="16" font-weight="bold">Internet</text>
+  
+  <!-- Arrows from Internet -->
+  <line x1="320" y1="100" x2="200" y2="150" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="480" y1="100" x2="600" y2="150" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Vercel (Frontend) -->
+  <rect x="100" y="160" width="200" height="80" rx="10" fill="url(#vercelGrad)" filter="url(#shadow)"/>
+  <text x="200" y="195" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="bold">Vercel</text>
+  <text x="200" y="215" text-anchor="middle" fill="#cccccc" font-family="Arial, sans-serif" font-size="12">linkdo.cloud</text>
+  <text x="200" y="232" text-anchor="middle" fill="#888888" font-family="Arial, sans-serif" font-size="11">Frontend (React)</text>
+  
+  <!-- AWS EC2 Box -->
+  <rect x="400" y="160" width="350" height="400" rx="15" fill="#161b22" stroke="url(#awsGrad)" stroke-width="3" filter="url(#shadow)"/>
+  <text x="575" y="185" text-anchor="middle" fill="url(#awsGrad)" font-family="Arial, sans-serif" font-size="14" font-weight="bold">AWS EC2</text>
+  <text x="575" y="200" text-anchor="middle" fill="#888888" font-family="Arial, sans-serif" font-size="10">api.linkdo.cloud</text>
+  
+  <!-- k3s Box inside EC2 -->
+  <rect x="420" y="215" width="310" height="325" rx="10" fill="#21262d" stroke="url(#k3sGrad)" stroke-width="2"/>
+  <text x="575" y="240" text-anchor="middle" fill="url(#k3sGrad)" font-family="Arial, sans-serif" font-size="13" font-weight="bold">k3s (Kubernetes)</text>
+  
+  <!-- Traefik Ingress -->
+  <rect x="440" y="260" width="130" height="50" rx="8" fill="url(#traefikGrad)" filter="url(#shadow)"/>
+  <text x="505" y="285" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="11" font-weight="bold">Traefik</text>
+  <text x="505" y="300" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, sans-serif" font-size="9">Ingress Controller</text>
+  
+  <!-- cert-manager -->
+  <rect x="585" y="260" width="130" height="50" rx="8" fill="#21262d" stroke="#58a6ff" stroke-width="1"/>
+  <text x="650" y="285" text-anchor="middle" fill="#58a6ff" font-family="Arial, sans-serif" font-size="11" font-weight="bold">cert-manager</text>
+  <text x="650" y="300" text-anchor="middle" fill="#888888" font-family="Arial, sans-serif" font-size="9">Let's Encrypt</text>
+  
+  <!-- Arrow from Traefik to API -->
+  <line x1="505" y1="310" x2="505" y2="340" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- API Pods -->
+  <rect x="440" y="350" width="270" height="80" rx="8" fill="url(#apiGrad)" filter="url(#shadow)"/>
+  <text x="575" y="380" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="13" font-weight="bold">linkdo-api (x2 replicas)</text>
+  <text x="575" y="400" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, sans-serif" font-size="11">FastAPI + Gemini API</text>
+  <text x="575" y="418" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-family="Arial, sans-serif" font-size="10">Port 8000</text>
+  
+  <!-- Arrow from API to MongoDB -->
+  <line x1="575" y1="430" x2="575" y2="460" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- MongoDB -->
+  <rect x="440" y="470" width="270" height="60" rx="8" fill="url(#mongoGrad)" filter="url(#shadow)"/>
+  <text x="575" y="500" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="13" font-weight="bold">MongoDB</text>
+  <text x="575" y="518" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, sans-serif" font-size="10">PersistentVolume (20GB)</text>
+  
+  <!-- Arrow from Frontend to API (CORS) -->
+  <path d="M 300 200 Q 370 200 400 200" stroke="#8b949e" stroke-width="2" fill="none" stroke-dasharray="5,5"/>
+  <text x="350" y="190" text-anchor="middle" fill="#6e7681" font-family="Arial, sans-serif" font-size="10">CORS</text>
+  
+  <!-- GitHub Actions -->
+  <rect x="100" y="280" width="200" height="70" rx="10" fill="#21262d" stroke="#8b949e" stroke-width="1" filter="url(#shadow)"/>
+  <text x="200" y="310" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12" font-weight="bold">GitHub Actions</text>
+  <text x="200" y="330" text-anchor="middle" fill="#888888" font-family="Arial, sans-serif" font-size="10">CI/CD Pipeline</text>
+  <text x="200" y="345" text-anchor="middle" fill="#6e7681" font-family="Arial, sans-serif" font-size="9">Auto Deploy</text>
+  
+  <!-- Arrow from GitHub Actions to EC2 -->
+  <line x1="300" y1="315" x2="395" y2="315" stroke="#8b949e" stroke-width="2" marker-end="url(#arrowhead)" stroke-dasharray="5,5"/>
+  <text x="347" y="305" text-anchor="middle" fill="#6e7681" font-family="Arial, sans-serif" font-size="9">SSH Deploy</text>
+  
+  <!-- Domain Labels -->
+  <rect x="100" y="380" width="200" height="90" rx="10" fill="#21262d" stroke="#30363d" stroke-width="1"/>
+  <text x="200" y="405" text-anchor="middle" fill="#58a6ff" font-family="Arial, sans-serif" font-size="12" font-weight="bold">Domain Config</text>
+  <text x="200" y="425" text-anchor="middle" fill="#c9d1d9" font-family="Arial, sans-serif" font-size="10">linkdo.cloud - Vercel</text>
+  <text x="200" y="445" text-anchor="middle" fill="#c9d1d9" font-family="Arial, sans-serif" font-size="10">api.linkdo.cloud - EC2</text>
+  <text x="200" y="462" text-anchor="middle" fill="#3fb950" font-family="Arial, sans-serif" font-size="9">HTTPS (Let's Encrypt)</text>
+  
+  <!-- Tech Stack Labels -->
+  <rect x="100" y="490" width="200" height="70" rx="10" fill="#21262d" stroke="#30363d" stroke-width="1"/>
+  <text x="200" y="515" text-anchor="middle" fill="#58a6ff" font-family="Arial, sans-serif" font-size="12" font-weight="bold">Tech Stack</text>
+  <text x="200" y="535" text-anchor="middle" fill="#888888" font-family="Arial, sans-serif" font-size="9">k3s | Traefik | cert-manager</text>
+  <text x="200" y="550" text-anchor="middle" fill="#888888" font-family="Arial, sans-serif" font-size="9">FastAPI | MongoDB | Docker</text>
+</svg>

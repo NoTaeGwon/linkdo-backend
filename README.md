@@ -7,26 +7,36 @@ Google Gemini API를 활용한 **텍스트 임베딩**과 **PCA 차원 축소**�
 
 <br>
 
+## 🌐 Live Demo
+
+| 서비스 | URL |
+|--------|-----|
+| **프론트엔드** | https://linkdo.cloud |
+| **백엔드 API** | https://api.linkdo.cloud |
+| **API 문서** | https://api.linkdo.cloud/docs |
+
+<br>
+
 ## ✨ 주요 기능
 
-### 🧠 AI 기반 태스크 배치
+### AI 기반 태스크 배치
 - **텍스트 임베딩**: Google Gemini API로 태스크의 제목, 설명, 태그를 벡터화
 - **PCA 차원 축소**: 고차원 임베딩을 2D 좌표로 변환하여 시각화
 - **자동 군집화**: 의미적으로 유사한 태스크들이 가까이 배치됨
 
-### 🔗 자동 엣지 연결
+### 자동 엣지 연결
 - 태스크 생성 시 **공통 태그 기반**으로 기존 태스크와 자동 연결
 - 엣지 가중치 = `공통 태그 수 / 최대 태그 수`
 
-### 🏷️ AI 태그 추천
+### AI 태그 추천
 - Gemini LLM을 활용한 **맥락 기반 태그 제안**
 - 기존 태그 목록을 참고하여 일관성 있는 태그 추천
 
-### 📊 그래프 자동 정렬
+### 그래프 자동 정렬
 - 전체 태스크를 PCA로 재계산하여 **최적의 배치** 제공
 - StandardScaler로 정규화하여 일관된 시각화
 
-### 🔐 Workspace 기반 데이터 분리
+### Workspace 기반 데이터 분리
 - 각 사용자/브라우저별 **독립적인 데이터 공간** 제공
 - `X-Workspace-ID` 헤더로 데이터 격리
 
@@ -40,8 +50,12 @@ Google Gemini API를 활용한 **텍스트 임베딩**과 **PCA 차원 축소**�
 | **Database** | MongoDB 7.0 |
 | **AI/ML** | Google Gemini API (gemini-2.5-flash, gemini-embedding-001), scikit-learn (PCA) |
 | **Container** | Docker, Docker Compose |
-| **Orchestration** | Kubernetes (minikube / AWS EKS) |
-| **Cloud** | AWS (ECR, EKS, S3) |
+| **Orchestration** | Kubernetes (k3s) |
+| **Ingress** | Traefik (k3s 내장) |
+| **SSL** | Let's Encrypt (cert-manager) |
+| **CI/CD** | GitHub Actions |
+| **Cloud** | AWS EC2 |
+| **Frontend Hosting** | Vercel |
 
 <br>
 
@@ -69,7 +83,10 @@ linkdo-backend/
 │   ├── secrets.yaml
 │   ├── api-deployment.yaml
 │   ├── mongo-deployment.yaml
-│   └── ingress.yaml      # NGINX Ingress 설정
+│   └── ingress.yaml      # Traefik Ingress 설정
+├── .github/
+│   └── workflows/
+│       └── ci.yml        # CI/CD 파이프라인
 ├── Dockerfile
 ├── docker-compose.yml
 └── requirements.txt
@@ -83,7 +100,11 @@ linkdo-backend/
 모든 API 요청에 `X-Workspace-ID` 헤더가 **필수**입니다.
 
 ```bash
-curl -H "X-Workspace-ID: your-workspace-id" http://localhost:8080/api/tasks/
+# 프로덕션
+curl -H "X-Workspace-ID: your-workspace-id" https://api.linkdo.cloud/api/tasks/
+
+# 로컬 개발
+curl -H "X-Workspace-ID: your-workspace-id" http://localhost:8000/api/tasks/
 ```
 
 ### Tasks
@@ -184,12 +205,32 @@ minikube tunnel
 curl http://api.linkdo.local/api/tasks/ -H "X-Workspace-ID: test"
 ```
 
-### 4. Kubernetes (AWS EKS)
+### 4. AWS EC2 + k3s (프로덕션)
 
 ```bash
-# 클러스터 생성
-eksctl create cluster --name linkdo-cluster --region ap-northeast-2 \
-  --nodegroup-name linkdo-nodes --node-type t3.small --nodes 2
+# EC2 인스턴스에 SSH 접속
+ssh -i "your-key.pem" ubuntu@your-ec2-ip
+
+# k3s 설치 (경량 Kubernetes)
+curl -sfL https://get.k3s.io | sh -
+
+# kubectl 설정
+mkdir -p ~/.kube
+sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+sudo chown $(id -u):$(id -g) ~/.kube/config
+
+# Docker 설치
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+
+# 프로젝트 클론 및 빌드
+git clone https://github.com/NoTaeGwon/linkdo-backend.git
+cd linkdo-backend
+docker build -t linkdo-backend:latest .
+
+# k3s에 이미지 import
+docker save linkdo-backend:latest -o /tmp/linkdo-backend.tar
+sudo k3s ctr images import /tmp/linkdo-backend.tar
 
 # 리소스 배포
 kubectl apply -f k8s/namespace.yaml
@@ -197,9 +238,87 @@ kubectl apply -f k8s/secrets.yaml
 kubectl apply -f k8s/mongo-deployment.yaml
 kubectl apply -f k8s/api-deployment.yaml
 
-# URL 확인
-kubectl get service linkdo-api -n linkdo
+# 상태 확인
+kubectl get pods -n linkdo
 ```
+
+<br>
+
+## 🔄 CI/CD 파이프라인
+
+GitHub Actions를 통해 **자동 테스트, 빌드, 배포**가 이루어집니다.
+
+```
+main 브랜치 Push
+      ↓
+  [test] Python 설정, 의존성 설치, Lint 검사
+      ↓
+  [build] Docker 이미지 빌드 테스트
+      ↓
+  [deploy] EC2에 SSH 접속 → git pull → docker build → k3s 배포
+      ↓
+  ✅ 자동 배포 완료
+```
+
+### 워크플로우 설정
+
+`.github/workflows/ci.yml`:
+
+```yaml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: |
+          pip install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t linkdo-backend:${{ github.sha }} .
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/linkdo-backend
+            git pull origin main
+            docker build -t linkdo-backend:latest .
+            docker save linkdo-backend:latest -o /tmp/linkdo-backend.tar
+            sudo k3s ctr images import /tmp/linkdo-backend.tar
+            kubectl rollout restart deployment/linkdo-api -n linkdo
+```
+
+### GitHub Secrets 설정
+
+| Secret | 설명 |
+|--------|------|
+| `EC2_HOST` | EC2 퍼블릭 IP 또는 Elastic IP |
+| `EC2_USERNAME` | SSH 유저명 (ubuntu) |
+| `EC2_SSH_KEY` | SSH 프라이빗 키 내용 |
 
 <br>
 
@@ -281,11 +400,23 @@ for task in existing_tasks:
 
 <br>
 
-## 🌐 배포 아키텍처 (AWS EKS)
+## 🌐 배포 아키텍처 (AWS EC2 + k3s)
 
 <p align="center">
-  <img src="docs/images/aws-architecture.svg" alt="AWS EKS Architecture" width="700"/>
+  <img src="docs/images/aws-ec2-k3s-architecture.svg" alt="AWS EC2 + k3s Architecture" width="800"/>
 </p>
+
+### 인프라 구성
+
+| 구성요소 | 설명 |
+|----------|------|
+| **EC2 (t3.small)** | 2 vCPU, 2GB RAM |
+| **k3s** | 경량 Kubernetes (Rancher) |
+| **Traefik** | Ingress Controller + 자동 HTTPS |
+| **cert-manager** | Let's Encrypt 인증서 자동 발급/갱신 |
+| **MongoDB** | PersistentVolume으로 데이터 영속성 보장 |
+| **Vercel** | 프론트엔드 호스팅 (React) |
+| **GitHub Actions** | CI/CD 자동 배포 |
 
 <br>
 
@@ -300,9 +431,9 @@ for task in existing_tasks:
 
 ## 🔗 관련 저장소
 
-| 저장소 | 설명 |
-|--------|------|
-| [linkdo-frontend](https://github.com/your-username/linkdo-frontend) | React 기반 프론트엔드 |
+| 저장소 | 설명 | URL |
+|--------|------|-----|
+| [linkdo-frontend](https://github.com/NoTaeGwon/linkdo-frontend) | React 기반 프론트엔드 | https://linkdo.cloud |
 
 <br>
 
