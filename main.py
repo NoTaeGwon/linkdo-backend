@@ -40,12 +40,14 @@ async def log_proxy_headers(request: Request, call_next):
     response = await call_next(request)
     return response
 
-# CORS 설정 - 개발 서버 허용
+# CORS 설정 - 프론트엔드 허용
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",  # Vite dev
-        "http://localhost:4173",  # Vite preview
+        "http://localhost:5173",   # Vite dev
+        "http://localhost:4173",   # Vite preview
+        "https://linkdo.cloud",    # Production
+        "https://www.linkdo.cloud", # Production (www)
     ],
     allow_credentials=True,
     allow_methods=["*"],
