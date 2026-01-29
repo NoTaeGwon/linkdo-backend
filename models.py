@@ -107,6 +107,88 @@ class TaskResponse(BaseModel):
 # Edge 모델
 # ============================================================
 
+# ============================================================
+# Sync 모델
+# ============================================================
+
+class TaskSync(BaseModel):
+    """
+    동기화용 태스크 모델 (upsert 지원)
+    
+    Attributes:
+        id: 태스크 고유 식별자
+        title: 태스크 제목
+        description: 태스크 설명
+        priority: 우선순위
+        status: 상태
+        category: 카테고리
+        tags: 태그
+        due_date: 마감일
+        updated_at: 마지막 수정 시간 (충돌 해결용)
+        deleted: 삭제 여부 (soft delete)
+    """
+    id: str
+    title: str
+    description: Optional[str] = None
+    priority: Priority = "medium"
+    status: Status = "todo"
+    category: str = "general"
+    tags: list[str] = []
+    due_date: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    deleted: bool = False
+
+
+class EdgeSync(BaseModel):
+    """
+    동기화용 엣지 모델
+    
+    Attributes:
+        source: 시작 노드 ID
+        target: 끝 노드 ID
+        weight: 연관도
+        deleted: 삭제 여부
+    """
+    source: str
+    target: str
+    weight: float = 0.5
+    deleted: bool = False
+
+
+class SyncRequest(BaseModel):
+    """
+    동기화 요청 모델
+    
+    Attributes:
+        tasks: 동기화할 태스크 목록
+        edges: 동기화할 엣지 목록
+        last_sync_at: 마지막 동기화 시간
+    """
+    tasks: list[TaskSync] = []
+    edges: list[EdgeSync] = []
+    last_sync_at: Optional[datetime] = None
+
+
+class SyncResponse(BaseModel):
+    """
+    동기화 응답 모델
+    
+    Attributes:
+        tasks: 서버의 최신 태스크 목록
+        edges: 서버의 최신 엣지 목록
+        sync_stats: 동기화 통계
+        synced_at: 동기화 완료 시간
+    """
+    tasks: list[TaskResponse]
+    edges: list["EdgeResponse"]
+    sync_stats: dict
+    synced_at: datetime
+
+
+# ============================================================
+# Edge 모델
+# ============================================================
+
 class EdgeCreate(BaseModel):
     """
     새 엣지(태스크 간 연결) 생성 시 사용하는 모델
