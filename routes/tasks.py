@@ -341,6 +341,10 @@ def sync_tasks(
             "workspace_id": workspace_id
         })
         
+        # 삭제가 아닌 경우 title 필수 검증
+        if not task.deleted and (not task.title or task.title.strip() == ""):
+            continue  # title이 없으면 스킵 (또는 에러 반환 가능)
+        
         if task.deleted:
             # 삭제 요청
             if existing:
@@ -469,15 +473,48 @@ def sync_tasks(
                 stats["edges_created"] += 1
     
     # ========================================
-    # 3. 서버의 최신 데이터 반환
+    # 3. 서버의 최신 데이터 반환 (PCA 좌표 포함)
     # ========================================
+    import numpy as np
+    from sklearn.decomposition import PCA
+    from sklearn.preprocessing import StandardScaler
+    
     # 현재 워크스페이스의 모든 태스크
     all_tasks = list(tasks_collection.find({"workspace_id": workspace_id}))
+    
+    # PCA 좌표 계산
+    embeddings = []
+    tasks_with_embedding = []
+    
+    for task in all_tasks:
+        embedding = task.get("embedding", [])
+        if embedding:
+            embeddings.append(embedding)
+            tasks_with_embedding.append(task)
+    
+    coordinates = {}
+    if len(embeddings) >= 2:
+        pca = PCA(n_components=2)
+        coords_2d = pca.fit_transform(np.array(embeddings))
+        
+        scaler = StandardScaler()
+        coords_2d = scaler.fit_transform(coords_2d) * 40
+        
+        for i, task in enumerate(tasks_with_embedding):
+            coordinates[task.get("id")] = {
+                "x": float(coords_2d[i][0]),
+                "y": float(coords_2d[i][1])
+            }
+    
+    # 태스크 응답 생성 (PCA 좌표 포함)
     tasks_response = []
     for task in all_tasks:
+        task_id = task.get("id")
+        coord = coordinates.get(task_id, {"x": 0.0, "y": 0.0})
+        
         tasks_response.append({
             "workspace_id": task.get("workspace_id"),
-            "id": task.get("id"),
+            "id": task_id,
             "title": task.get("title"),
             "description": task.get("description"),
             "priority": task.get("priority", "medium"),
@@ -486,6 +523,8 @@ def sync_tasks(
             "tags": task.get("tags", []),
             "embedding": task.get("embedding", []),
             "due_date": task.get("due_date"),
+            "x": coord["x"],
+            "y": coord["y"],
         })
     
     # 현재 워크스페이스의 모든 엣지

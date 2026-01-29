@@ -91,6 +91,8 @@ class TaskResponse(BaseModel):
         category: 카테고리
         tags: 태그
         due_date: 마감일
+        x: PCA 계산된 X 좌표
+        y: PCA 계산된 Y 좌표
     """
     workspace_id: str
     id: str
@@ -102,6 +104,8 @@ class TaskResponse(BaseModel):
     tags: list[str]
     embedding: list[float] = []
     due_date: Optional[datetime] = None
+    x: float = 0.0
+    y: float = 0.0
 
 # ============================================================
 # Edge 모델
@@ -117,7 +121,7 @@ class TaskSync(BaseModel):
     
     Attributes:
         id: 태스크 고유 식별자
-        title: 태스크 제목
+        title: 태스크 제목 (deleted=True일 때 빈 문자열 허용)
         description: 태스크 설명
         priority: 우선순위
         status: 상태
@@ -128,11 +132,11 @@ class TaskSync(BaseModel):
         deleted: 삭제 여부 (soft delete)
     """
     id: str
-    title: str
+    title: Optional[str] = ""  # deleted=True일 때 빈 문자열 허용
     description: Optional[str] = None
-    priority: Priority = "medium"
-    status: Status = "todo"
-    category: str = "general"
+    priority: Optional[Priority] = "medium"
+    status: Optional[Status] = "todo"
+    category: Optional[str] = "general"
     tags: list[str] = []
     due_date: Optional[datetime] = None
     updated_at: Optional[datetime] = None

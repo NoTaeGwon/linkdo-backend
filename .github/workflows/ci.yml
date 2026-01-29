@@ -68,6 +68,9 @@ jobs:
             # Docker 이미지 빌드
             docker build -t linkdo-backend:latest .
             
+            # 기존 k3s 이미지 삭제 (캐시 문제 방지)
+            sudo k3s ctr images rm docker.io/library/linkdo-backend:latest 2>/dev/null || true
+            
             # k3s에 이미지 import
             docker save linkdo-backend:latest -o /tmp/linkdo-backend.tar
             sudo k3s ctr images import /tmp/linkdo-backend.tar
