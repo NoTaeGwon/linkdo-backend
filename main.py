@@ -29,8 +29,8 @@ from routes import tasks, edges, tags, graph
 # 환경변수 로드
 load_dotenv()
 
-# FastAPI 앱 생성
-app = FastAPI(title="Linkdo API")
+# FastAPI 앱 생성 (trailing slash 리다이렉트 비활성화)
+app = FastAPI(title="Linkdo API", redirect_slashes=False)
 
 # 프록시 헤더 미들웨어 추가 (개발/디버깅용)
 @app.middleware("http")
