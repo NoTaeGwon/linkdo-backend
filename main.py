@@ -29,15 +29,29 @@ from routes import tasks, edges, tags, graph
 # 환경변수 로드
 load_dotenv()
 
-# FastAPI 앱 생성 (trailing slash 리다이렉트 비활성화)
-app = FastAPI(title="Linkdo API", redirect_slashes=False)
+# FastAPI 앱 생성
+app = FastAPI(title="Linkdo API")
 
-# 프록시 헤더 미들웨어 추가 (개발/디버깅용)
+# HTTPS 스킴 강제 미들웨어 (리버스 프록시 환경용)
 @app.middleware("http")
-async def log_proxy_headers(request: Request, call_next):
-    logger.info(f"Request path: {request.url.path}")
-    logger.info(f"Request headers: {request.headers}")
+async def force_https_scheme(request: Request, call_next):
+    """
+    리버스 프록시(Traefik) 뒤에서 실행될 때
+    X-Forwarded-Proto 헤더를 확인하여 HTTPS로 들어온 요청의
+    리다이렉트 URL도 HTTPS를 사용하도록 함
+    """
+    # X-Forwarded-Proto 헤더 확인
+    forwarded_proto = request.headers.get("x-forwarded-proto", "http")
+    
     response = await call_next(request)
+    
+    # 리다이렉트 응답이고, Location 헤더가 있으면 스킴 수정
+    if response.status_code in (301, 302, 303, 307, 308):
+        location = response.headers.get("location", "")
+        if location.startswith("http://") and forwarded_proto == "https":
+            new_location = "https://" + location[7:]
+            response.headers["location"] = new_location
+    
     return response
 
 # CORS 설정 - 프론트엔드 허용
