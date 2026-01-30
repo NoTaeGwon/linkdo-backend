@@ -62,6 +62,9 @@ jobs:
           script: |
             cd ~/linkdo-backend
             
+            # k3s kubeconfig 설정
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+            
             # 최신 코드 가져오기
             git pull origin main
             
@@ -76,10 +79,10 @@ jobs:
             sudo k3s ctr images import /tmp/linkdo-backend.tar
             rm /tmp/linkdo-backend.tar
             
-            # Deployment 재시작 (새 이미지 적용)
-            kubectl rollout restart deployment/linkdo-api -n linkdo
+            # Deployment 재시작 (새 이미지 적용) - sudo 사용
+            sudo kubectl rollout restart deployment/linkdo-api -n linkdo
             
             # 배포 상태 확인
-            kubectl rollout status deployment/linkdo-api -n linkdo --timeout=60s
+            sudo kubectl rollout status deployment/linkdo-api -n linkdo --timeout=60s
             
             echo "✅ 배포 완료!"
