@@ -40,6 +40,12 @@ Google Gemini API를 활용한 **텍스트 임베딩**과 **PCA 차원 축소**�
 - 각 사용자/브라우저별 **독립적인 데이터 공간** 제공
 - `X-Workspace-ID` 헤더로 데이터 격리
 
+### 오프라인 동기화 (Sync API)
+- **Offline-First** 지원: 오프라인에서 작업 후 온라인 시 자동 동기화
+- Bulk upsert: 여러 태스크/엣지를 한 번에 동기화
+- Soft delete: `deleted: true` 플래그로 삭제 동기화
+- 충돌 해결: `updated_at` 타임스탬프 기반
+
 <br>
 
 ## 🛠️ 기술 스택
@@ -113,6 +119,7 @@ curl -H "X-Workspace-ID: your-workspace-id" http://localhost:8000/api/tasks/
 | `GET` | `/api/tasks/` | 전체 태스크 조회 |
 | `GET` | `/api/tasks/{id}` | 특정 태스크 조회 |
 | `POST` | `/api/tasks/` | 태스크 생성 (임베딩 + 자동 엣지 연결) |
+| `POST` | `/api/tasks/sync` | **오프라인 동기화** (bulk upsert) |
 | `PATCH` | `/api/tasks/{id}` | 태스크 부분 수정 |
 | `DELETE` | `/api/tasks/{id}` | 태스크 삭제 |
 | `DELETE` | `/api/tasks/{id}/cascade` | 태스크 + 연결된 엣지 삭제 |
@@ -307,9 +314,12 @@ jobs:
             cd ~/linkdo-backend
             git pull origin main
             docker build -t linkdo-backend:latest .
+            # 이미지 캐시 삭제 후 새로 import
+            sudo k3s ctr images rm docker.io/library/linkdo-backend:latest 2>/dev/null || true
             docker save linkdo-backend:latest -o /tmp/linkdo-backend.tar
             sudo k3s ctr images import /tmp/linkdo-backend.tar
-            kubectl rollout restart deployment/linkdo-api -n linkdo
+            # sudo 필수 (k3s kubeconfig 권한)
+            sudo kubectl rollout restart deployment/linkdo-api -n linkdo
 ```
 
 ### GitHub Secrets 설정
@@ -417,6 +427,35 @@ for task in existing_tasks:
 | **MongoDB** | PersistentVolume으로 데이터 영속성 보장 |
 | **Vercel** | 프론트엔드 호스팅 (React) |
 | **GitHub Actions** | CI/CD 자동 배포 |
+
+### 주요 인프라 설정
+
+#### HTTPS 리다이렉트 미들웨어
+리버스 프록시(Traefik) 뒤에서 실행될 때 `X-Forwarded-Proto` 헤더를 확인하여 리다이렉트 URL의 스킴을 HTTPS로 유지합니다.
+
+```python
+# main.py - HTTPS 스킴 강제 미들웨어
+@app.middleware("http")
+async def force_https_scheme(request: Request, call_next):
+    forwarded_proto = request.headers.get("x-forwarded-proto", "http")
+    response = await call_next(request)
+    
+    if response.status_code in (301, 302, 303, 307, 308):
+        location = response.headers.get("location", "")
+        if location.startswith("http://") and forwarded_proto == "https":
+            response.headers["location"] = "https://" + location[7:]
+    
+    return response
+```
+
+#### iptables 설정 (EC2)
+외부 트래픽만 Traefik으로 리다이렉트 (Pod 외부 통신 보장):
+
+```bash
+# 올바른 설정 - 외부 인터페이스(ens5)에서 들어오는 트래픽만 리다이렉트
+sudo iptables -t nat -A PREROUTING -i ens5 -p tcp --dport 80 -j REDIRECT --to-port 30348
+sudo iptables -t nat -A PREROUTING -i ens5 -p tcp --dport 443 -j REDIRECT --to-port 31374
+```
 
 <br>
 
