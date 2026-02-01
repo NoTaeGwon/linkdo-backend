@@ -1,0 +1,35 @@
+# Production Ingress - NGINX Ingress Controller for EC2
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: linkdo-ingress
+  namespace: linkdo
+  annotations:
+    # NGINX Ingress Controller
+    kubernetes.io/ingress.class: nginx
+    # CORS 설정
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://linkdo.cloud, https://www.linkdo.cloud"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Content-Type, X-Workspace-ID"
+    # SSL Redirect
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # cert-manager로 인증서 자동 발급
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.linkdo.cloud
+      secretName: linkdo-api-tls
+  rules:
+    - host: api.linkdo.cloud
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: linkdo-api
+                port:
+                  number: 80
