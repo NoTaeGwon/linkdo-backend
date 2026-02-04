@@ -29,17 +29,3 @@ spec:
                 name: linkdo-api
                 port:
                   number: 80
-
-    # ========================================
-    # 프론트엔드: linkdo.local (나중에 추가)
-    # ========================================
-    # - host: linkdo.local
-    #   http:
-    #     paths:
-    #       - path: /
-    #         pathType: Prefix
-    #         backend:
-    #           service:
-    #             name: linkdo-frontend
-    #             port:
-    #               number: 80

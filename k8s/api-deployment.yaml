@@ -1,6 +1,9 @@
 # ================================================================
 # 파일명       : api-deployment.yaml
-# 목적         : Linkdo FastAPI 백엔드 배포 (로컬 Kubernetes용)
+# 목적         : Linkdo FastAPI 백엔드 배포
+# 환경         : 로컬(minikube/Docker Desktop) 및 EC2(k3s) 공용
+# 참고         : imagePullPolicy: Never → 로컬 빌드 이미지 사용
+#               (minikube: docker-env, k3s: ctr images import)
 # ================================================================
 
 apiVersion: apps/v1
@@ -20,8 +23,8 @@ spec:
     spec:
       containers:
         - name: linkdo-api
-          image: linkdo-backend:latest # 로컬 이미지
-          imagePullPolicy: Never # minikube 로컬 이미지 사용
+          image: linkdo-backend:latest
+          imagePullPolicy: Never # 로컬 빌드 이미지 사용
           ports:
             - containerPort: 8000
           env:
@@ -66,5 +69,5 @@ spec:
     - port: 80
       targetPort: 8000
       nodePort: 30080 # 고정 포트
-  type: NodePort # 로컬 접근용
+  type: NodePort # Ingress 없이 직접 접근 시 사용
 
